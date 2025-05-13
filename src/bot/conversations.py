@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
+    Application,
     CommandHandler,
     MessageHandler,
     filters,
@@ -14,7 +15,7 @@ from src.data import storage
 from src.data.orders import generate_order_id, save_order, update_order_status
 from src.data.users import add_user
 from src.crypto.factory import get_wallet_class
-from src.bot.notifications import send_payment_receipt, send_payment_failure, send_insufficient_funds
+from src.bot.notifications import send_payment_receipt, send_payment_failure, send_insufficient_funds, send_insufficient_bandwidth
 from src.data.utils import round_byn
 from tronpy.keys import PrivateKey
 
@@ -140,7 +141,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
         ]
         await update.message.reply_text(
-            f"Сумма к оплате: {round_byn(byn_amount)} BYN\n"
+            f"Сумма к оплате: {byn_amount} BYN\n"
             f"Курс: 1 {currency} = {rate} BYN\n\n"
             "Подтвердите платеж:",
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -206,10 +207,30 @@ async def confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 continue
 
         if not selected_wallet:
-            update_order_status(order_id, "failed", {"error": "Insufficient funds"})
+            update_order_status(order_id, "failed", {"error": "Insufficient funds or bandwidth"})
             await send_insufficient_funds(context.bot, payment_data, update.effective_user.username)
             await query.edit_message_text("⚠️ Операция будет выполнена вручную")
             return ConversationHandler.END
+
+        # Проверка bandwidth
+        MIN_BANDWIDTH = 300  # Минимальный порог для TRX-транзакции
+        if selected_wallet["bandwidth"] < MIN_BANDWIDTH:
+            logger.warning(
+                f"Insufficient bandwidth for wallet {selected_wallet['address']}: "
+                f"{selected_wallet['bandwidth']} < {MIN_BANDWIDTH}"
+            )
+            update_order_status(
+                order_id,
+                "processing",
+                {"warning": f"Low bandwidth: {selected_wallet['bandwidth']} < {MIN_BANDWIDTH}"}
+            )
+            await send_insufficient_bandwidth(
+                context.bot,
+                payment_data,
+                selected_wallet["bandwidth"],
+                MIN_BANDWIDTH,
+                update.effective_user.username
+            )
 
         txid = wallet.send_transaction(
             private_key=selected_wallet["private_key"],
