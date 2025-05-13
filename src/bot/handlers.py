@@ -1,5 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
+
+from src.data import storage
 from src.data.users import is_authorized
 from src.config import load_config
 from src.data.users import generate_auth_key
@@ -46,21 +48,21 @@ async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(f"🔑 Новый ключ доступа:\n`{new_key}`", parse_mode="Markdown")
 
 async def check_auth_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """
-    Проверяет, авторизован ли пользователь. Используется для команд, требующих авторизации.
-
-    Args:
-        update: Объект обновления от Telegram.
-        context: Контекст обработчика.
-
-    Returns:
-        bool: True, если пользователь авторизован, иначе False.
-    """
+    """Проверяет, авторизован ли пользователь."""
+    config = load_config()
     user_id = str(update.effective_user.id)
-    if not is_authorized(user_id):
-        await update.message.reply_text("❌ Для доступа к этой команде необходимо авторизоваться!")
+
+    # Администратор имеет доступ без активации
+    if user_id == str(config["ADMIN_ID"]):
+        return True
+
+    # Проверка активации для остальных пользователей
+    users = storage.load_file(storage.USERS)
+    if user_id not in users:
+        await update.message.reply_text("❌ Вы не авторизованы! Используйте /auth для активации.")
         return False
     return True
+
 
 def get_handlers() -> list[CommandHandler]:
     """

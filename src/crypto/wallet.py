@@ -131,7 +131,10 @@ class TronWallet(CryptoWallet):
         """
         try:
             account = self.client.get_account(address)
-            return 600 - account.get("free_net_usage", 600)
+            usage = account.get("free_net_usage", -1)
+            if usage == -1:
+                return 600
+            return 600 - usage
         except Exception as e:
             logger.error(f"Bandwidth check failed for {address}: {str(e)}")
             return 0
