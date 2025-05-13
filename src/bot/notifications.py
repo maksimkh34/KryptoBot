@@ -1,8 +1,7 @@
 from telegram import Bot
-
-from src.data.utils import round_byn
 from src.config import load_config
-from src.data.storage import load_file, WALLETS, SETTINGS
+from src.data import storage
+from src.data.utils import round_byn
 from typing import Optional
 from tronpy.keys import PrivateKey
 
@@ -19,16 +18,20 @@ async def send_payment_receipt(bot: Bot, payment_data: dict, txid: str, username
     """
     config = load_config()
     admin_id = config["ADMIN_ID"]
-    settings = load_file(SETTINGS)
-    byn_amount = round(payment_data["amount"] * settings.get("trx_rate", config["TRX_RATE"]), 2)
+    settings = storage.load_file(storage.SETTINGS)
+    currency = payment_data["currency"]
+    currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
+    currency_name = currency_info["name"] if currency_info else currency
+    rate_key = currency_info["rate_key"] if currency_info else "trx_rate"
+    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, config["TRX_RATE"]))
 
     message = (
-        f"🆕 Новый платеж ({payment_data['currency']}):\n"
+        f"🆕 Новый платеж ({currency_name}):\n"
         f"👤 Пользователь: @{username}\n"
         f"📤 С кошелька: `{from_address}`\n"
         f"📥 На кошелек: `{payment_data['wallet']}`\n"
-        f"💰 Сумма TRX: {payment_data['amount']}\n"
-        f"💸 Сумма BYN: {round_byn(byn_amount)}\n"
+        f"💰 Сумма {currency}: {payment_data['amount']}\n"
+        f"💸 Сумма BYN: {byn_amount}\n"
         f"🔗 TXID: `{txid}`"
     )
     await bot.send_message(chat_id=admin_id, text=message, parse_mode="Markdown")
@@ -46,19 +49,23 @@ async def send_payment_failure(bot: Bot, payment_data: dict, error: str, usernam
     """
     config = load_config()
     admin_id = config["ADMIN_ID"]
-    settings = load_file(SETTINGS)
-    byn_amount = round(payment_data["amount"] * settings.get("trx_rate", config["TRX_RATE"]), 2)
+    settings = storage.load_file(storage.SETTINGS)
+    currency = payment_data["currency"]
+    currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
+    currency_name = currency_info["name"] if currency_info else currency
+    rate_key = currency_info["rate_key"] if currency_info else "trx_rate"
+    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, config["TRX_RATE"]))
 
     message = (
         f"❌ Ошибка платежа!\n"
         f"👤 Пользователь: @{username}\n"
-        f"📤 С кошелька: {from_address or 'не определен'}\n"
-        f"📥 На кошелек: {payment_data['wallet']}\n"
-        f"💰 Сумма TRX: {payment_data['amount']}\n"
-        f"💸 Сумма BYN: {round_byn(byn_amount)}\n"
+        f"📤 С кошелька: `{from_address or 'не определен'}`\n"
+        f"📥 На кошелек: `{payment_data['wallet']}`\n"
+        f"💰 Сумма {currency}: {payment_data['amount']}\n"
+        f"💸 Сумма BYN: {byn_amount}\n"
         f"🚫 Ошибка: {error}"
     )
-    await bot.send_message(chat_id=admin_id, text=message)
+    await bot.send_message(chat_id=admin_id, text=message, parse_mode="Markdown")
 
 async def send_insufficient_funds(bot: Bot, payment_data: dict, username: str) -> None:
     """
@@ -69,32 +76,37 @@ async def send_insufficient_funds(bot: Bot, payment_data: dict, username: str) -
         payment_data: Данные платежа.
         username: Имя пользователя Telegram.
     """
-    from src.crypto.wallet import TronWallet
+    from src.crypto.factory import get_wallet_class
 
     config = load_config()
     admin_id = config["ADMIN_ID"]
-    settings = load_file(SETTINGS)
-    byn_amount = round(payment_data["amount"] * settings.get("trx_rate", config["TRX_RATE"]), 2)
+    settings = storage.load_file(storage.SETTINGS)
+    currency = payment_data["currency"]
+    currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
+    currency_name = currency_info["name"] if currency_info else currency
+    rate_key = currency_info["rate_key"] if currency_info else "trx_rate"
+    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, config["TRX_RATE"]))
 
-    tron = TronWallet()
-    wallets = load_file(WALLETS).get("active", [])
+    wallet_class = get_wallet_class(currency_info["wallet_class"] if currency_info else "TronWallet")
+    wallet = wallet_class()
+    wallets = storage.load_file(storage.WALLETS).get("active", [])
     wallets_info = []
-    for wallet in wallets:
+    for w in wallets:
         try:
-            priv_key = wallet["private_key"]
+            priv_key = w["private_key"]
             address = PrivateKey(bytes.fromhex(priv_key)).public_key.to_base58check_address()
-            balance = tron.get_balance(address)
-            bandwidth = tron.estimate_bandwidth_usage(address)
-            wallets_info.append(f"▪ {address}: {balance:.2f} TRX | BW: {bandwidth}")
+            balance = wallet.get_balance(address)
+            bandwidth = wallet.estimate_bandwidth_usage(address)
+            wallets_info.append(f"▪ `{address}`: {balance:.2f} {currency} | BW: {bandwidth}")
         except Exception:
             continue
 
     message = (
         f"⚠️ Недостаточно средств для автоматической оплаты!\n"
         f"👤 Пользователь: @{username}\n"
-        f"📥 На кошелек: {payment_data['wallet']}\n"
-        f"💰 Требуемая сумма TRX: {payment_data['amount']}\n"
-        f"💸 Сумма BYN: {round_byn(byn_amount)}\n"
-        "Балансы кошельков:\n" + "\n".join(wallets_info)
+        f"📥 На кошелек: `{payment_data['wallet']}`\n"
+        f"💰 Требуемая сумма {currency}: {payment_data['amount']}\n"
+        f"💸 Сумма BYN: {byn_amount}\n"
+        f"Балансы кошельков:\n" + "\n".join(wallets_info)
     )
-    await bot.send_message(chat_id=admin_id, text=message)
+    await bot.send_message(chat_id=admin_id, text=message, parse_mode="Markdown")

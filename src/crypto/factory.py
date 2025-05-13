@@ -1,23 +1,24 @@
-from typing import Type
-from .wallet import CryptoWallet, TronWallet
+from src.crypto.wallet import TronWallet
 
-def get_wallet_class(currency: str) -> Type[CryptoWallet]:
+def get_wallet_class(wallet_class_name: str):
     """
-    Возвращает класс кошелька для указанной валюты.
+    Возвращает класс кошелька по имени.
 
     Args:
-        currency: Код валюты (например, 'TRX').
+        wallet_class_name: Название класса кошелька (например, 'TronWallet').
 
     Returns:
-        Type[CryptoWallet]: Класс кошелька.
+        type: Класс кошелька.
 
     Raises:
-        ValueError: Если валюта не поддерживается.
+        ValueError: Если класс кошелька не найден.
     """
-    wallets: dict[str, Type[CryptoWallet]] = {
-        "TRX": TronWallet,
+    wallet_classes = {
+        "TronWallet": TronWallet
+        # Добавьте другие классы кошельков здесь, например:
+        # "EthWallet": EthWallet
     }
-    currency = currency.upper()
-    if currency not in wallets:
-        raise ValueError(f"Unsupported currency: {currency}")
-    return wallets[currency]
+    wallet_class = wallet_classes.get(wallet_class_name)
+    if not wallet_class:
+        raise ValueError(f"Wallet class {wallet_class_name} not found")
+    return wallet_class

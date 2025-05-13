@@ -9,14 +9,13 @@ from telegram.ext import (
     ConversationHandler,
     CallbackQueryHandler,
 )
-
-import src.data.utils
 from src.config import load_config
-from src.data.storage import load_file, save_file, KEYS, SETTINGS, WALLETS
+from src.data import storage
 from src.data.orders import generate_order_id, save_order, update_order_status
 from src.data.users import add_user
-from src.crypto.wallet import TronWallet
+from src.crypto.factory import get_wallet_class
 from src.bot.notifications import send_payment_receipt, send_payment_failure, send_insufficient_funds
+from src.data.utils import round_byn
 from tronpy.keys import PrivateKey
 
 logger = logging.getLogger(__name__)
@@ -36,12 +35,12 @@ async def process_auth_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Обрабатывает введенный ключ авторизации."""
     user_id = str(update.effective_user.id)
     input_key = update.message.text.strip()
-    keys_data = load_file(KEYS)
+    keys_data = storage.load_file(storage.KEYS)
 
     if input_key in keys_data.get("generated_keys", {}):
         if keys_data["generated_keys"][input_key]["status"] == "active":
             keys_data["generated_keys"][input_key]["status"] = "used"
-            save_file(keys_data, KEYS)
+            storage.save_file(keys_data, storage.KEYS)
             add_user(user_id, input_key)
             await update.message.reply_text("✅ Авторизация успешна!")
             return ConversationHandler.END
@@ -67,7 +66,12 @@ async def start_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     }
     save_order(context.user_data["payment_data"])
 
-    currencies = [["TRX"]]
+    settings = storage.load_file(storage.SETTINGS)
+    currencies = [[currency["code"] for currency in settings.get("currencies", [])]]
+    if not currencies[0]:
+        await update.message.reply_text("❌ Нет доступных валют!", reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+
     markup = ReplyKeyboardMarkup(
         currencies,
         one_time_keyboard=True,
@@ -80,7 +84,10 @@ async def start_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def process_currency(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Обрабатывает выбор валюты."""
     currency = update.message.text.strip().upper()
-    if currency not in {"TRX"}:
+    settings = storage.load_file(storage.SETTINGS)
+    valid_currencies = {c["code"] for c in settings.get("currencies", [])}
+
+    if currency not in valid_currencies:
         await update.message.reply_text("❌ Валюта не поддерживается", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
@@ -115,23 +122,33 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         amount = float(update.message.text.replace(",", "."))
         context.user_data["payment_data"]["amount"] = amount
         config = load_config()
-        settings = load_file(SETTINGS)
-        byn_amount = round(amount * settings.get("trx_rate", config["TRX_RATE"]), 2)
+        settings = storage.load_file(storage.SETTINGS)
+
+        # Найти валюту и её курс
+        currency = context.user_data["payment_data"]["currency"]
+        currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
+        if not currency_info:
+            await update.message.reply_text("❌ Ошибка конфигурации валюты!", reply_markup=ReplyKeyboardRemove())
+            return ConversationHandler.END
+
+        rate_key = currency_info["rate_key"]
+        rate = settings.get(rate_key, config.get("TRX_RATE", 3.25))
+        byn_amount = round_byn(amount * rate)
 
         keyboard = [
             [InlineKeyboardButton("✅ Подтвердить", callback_data="confirm")],
             [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
         ]
         await update.message.reply_text(
-            f"Сумма к оплате: {src.data.utils.round_byn(byn_amount)} BYN\n"
-            f"Курс: 1 TRX = {settings.get('trx_rate', config['TRX_RATE'])} BYN\n\n"
+            f"Сумма к оплате: {round_byn(byn_amount)} BYN\n"
+            f"Курс: 1 {currency} = {rate} BYN\n\n"
             "Подтвердите платеж:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         update_order_status(
             context.user_data["payment_data"]["order_id"],
             "amount_entered",
-            {"amount": amount, "byn_amount": src.data.utils.round_byn(byn_amount)}
+            {"amount": amount, "byn_amount": float(byn_amount)}
         )
         return CONFIRMATION
     except ValueError:
@@ -154,23 +171,31 @@ async def confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             status="processing",
             additional_data={"updated_at": datetime.now().isoformat()}
         )
-        tron = TronWallet()
-        if not tron.validate_address(payment_data["wallet"]):
+        settings = storage.load_file(storage.SETTINGS)
+        currency = payment_data["currency"]
+        currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
+        if not currency_info:
+            raise ValueError("Currency not found in settings")
+
+        wallet_class = get_wallet_class(currency_info["wallet_class"])
+        wallet = wallet_class()
+
+        if not wallet.validate_address(payment_data["wallet"]):
             update_order_status(order_id, "failed", {"error": "Invalid address"})
             await query.edit_message_text("❌ Неверный адрес кошелька")
             return ConversationHandler.END
 
-        wallets = load_file(WALLETS).get("active", [])
+        wallets = storage.load_file(storage.WALLETS).get("active", [])
         selected_wallet = None
-        for wallet in wallets:
+        for f_wallet in wallets:
             try:
-                priv_key = PrivateKey(bytes.fromhex(wallet["private_key"]))
+                priv_key = PrivateKey(bytes.fromhex(f_wallet["private_key"]))
                 address = priv_key.public_key.to_base58check_address()
-                balance = tron.get_balance(address)
-                bandwidth = tron.estimate_bandwidth_usage(address)
+                balance = wallet.get_balance(address)
+                bandwidth = wallet.estimate_bandwidth_usage(address)
                 if balance >= payment_data["amount"] and bandwidth > 0:
                     selected_wallet = {
-                        "private_key": wallet["private_key"],
+                        "private_key": f_wallet["private_key"],
                         "address": address,
                         "balance": balance,
                         "bandwidth": bandwidth
@@ -186,7 +211,7 @@ async def confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.edit_message_text("⚠️ Операция будет выполнена вручную")
             return ConversationHandler.END
 
-        txid = tron.send_transaction(
+        txid = wallet.send_transaction(
             private_key=selected_wallet["private_key"],
             to_address=payment_data["wallet"],
             amount=payment_data["amount"]
@@ -209,7 +234,10 @@ async def confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             update.effective_user.username,
             selected_wallet["address"]
         )
-        await query.edit_message_text("✅ Платеж успешно выполнен!")
+        await query.edit_message_text(
+            f"✅ Платеж успешно выполнен!\nTXID: `{txid}`",
+            parse_mode="Markdown"
+        )
     except Exception as e:
         logger.error(f"Payment error: {str(e)}")
         update_order_status(
@@ -253,11 +281,16 @@ def get_auth_conversation() -> ConversationHandler:
 
 def get_payment_conversation() -> ConversationHandler:
     """Возвращает ConversationHandler для платежей."""
+    settings = storage.load_file(storage.SETTINGS)
+    valid_currencies = "|".join(c["code"] for c in settings.get("currencies", []))
     return ConversationHandler(
         entry_points=[CommandHandler("pay", start_payment)],
         states={
             CURRENCY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Regex(r'^TRX$'), process_currency)
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND & filters.Regex(f"^{valid_currencies}$"),
+                    process_currency
+                )
             ],
             WALLET: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_wallet)
