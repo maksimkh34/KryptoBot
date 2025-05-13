@@ -9,6 +9,8 @@ from telegram.ext import (
     ConversationHandler,
     CallbackQueryHandler,
 )
+
+import src.data.utils
 from src.config import load_config
 from src.data.storage import load_file, save_file, KEYS, SETTINGS, WALLETS
 from src.data.orders import generate_order_id, save_order, update_order_status
@@ -121,7 +123,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             [InlineKeyboardButton("❌ Отмена", callback_data="cancel")]
         ]
         await update.message.reply_text(
-            f"Сумма к оплате: {byn_amount} BYN\n"
+            f"Сумма к оплате: {src.data.utils.round_byn(byn_amount)} BYN\n"
             f"Курс: 1 TRX = {settings.get('trx_rate', config['TRX_RATE'])} BYN\n\n"
             "Подтвердите платеж:",
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -129,7 +131,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         update_order_status(
             context.user_data["payment_data"]["order_id"],
             "amount_entered",
-            {"amount": amount, "byn_amount": byn_amount}
+            {"amount": amount, "byn_amount": src.data.utils.round_byn(byn_amount)}
         )
         return CONFIRMATION
     except ValueError:

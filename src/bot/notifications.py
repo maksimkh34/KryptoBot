@@ -1,4 +1,6 @@
 from telegram import Bot
+
+from src.data.utils import round_byn
 from src.config import load_config
 from src.data.storage import load_file, WALLETS, SETTINGS
 from typing import Optional
@@ -23,13 +25,13 @@ async def send_payment_receipt(bot: Bot, payment_data: dict, txid: str, username
     message = (
         f"🆕 Новый платеж ({payment_data['currency']}):\n"
         f"👤 Пользователь: @{username}\n"
-        f"📤 С кошелька: {from_address}\n"
-        f"📥 На кошелек: {payment_data['wallet']}\n"
+        f"📤 С кошелька: `{from_address}`\n"
+        f"📥 На кошелек: `{payment_data['wallet']}`\n"
         f"💰 Сумма TRX: {payment_data['amount']}\n"
-        f"💸 Сумма BYN: {byn_amount}\n"
-        f"🔗 TXID: {txid}"
+        f"💸 Сумма BYN: {round_byn(byn_amount)}\n"
+        f"🔗 TXID: `{txid}`"
     )
-    await bot.send_message(chat_id=admin_id, text=message)
+    await bot.send_message(chat_id=admin_id, text=message, parse_mode="Markdown")
 
 async def send_payment_failure(bot: Bot, payment_data: dict, error: str, username: str, from_address: Optional[str] = None) -> None:
     """
@@ -53,7 +55,7 @@ async def send_payment_failure(bot: Bot, payment_data: dict, error: str, usernam
         f"📤 С кошелька: {from_address or 'не определен'}\n"
         f"📥 На кошелек: {payment_data['wallet']}\n"
         f"💰 Сумма TRX: {payment_data['amount']}\n"
-        f"💸 Сумма BYN: {byn_amount}\n"
+        f"💸 Сумма BYN: {round_byn(byn_amount)}\n"
         f"🚫 Ошибка: {error}"
     )
     await bot.send_message(chat_id=admin_id, text=message)
@@ -92,7 +94,7 @@ async def send_insufficient_funds(bot: Bot, payment_data: dict, username: str) -
         f"👤 Пользователь: @{username}\n"
         f"📥 На кошелек: {payment_data['wallet']}\n"
         f"💰 Требуемая сумма TRX: {payment_data['amount']}\n"
-        f"💸 Сумма BYN: {byn_amount}\n"
+        f"💸 Сумма BYN: {round_byn(byn_amount)}\n"
         "Балансы кошельков:\n" + "\n".join(wallets_info)
     )
     await bot.send_message(chat_id=admin_id, text=message)
