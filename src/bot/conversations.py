@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application,
     CommandHandler,
     MessageHandler,
     filters,
@@ -11,11 +10,10 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 from src.config import load_config
-from src.data.storage import load_json, save_json
+from src.data.storage import load_file, save_file, KEYS, SETTINGS, WALLETS
 from src.data.orders import generate_order_id, save_order, update_order_status
 from src.data.users import add_user
 from src.crypto.wallet import TronWallet
-from src.crypto.factory import get_wallet_class
 from src.bot.notifications import send_payment_receipt, send_payment_failure, send_insufficient_funds
 from tronpy.keys import PrivateKey
 
@@ -36,12 +34,12 @@ async def process_auth_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Обрабатывает введенный ключ авторизации."""
     user_id = str(update.effective_user.id)
     input_key = update.message.text.strip()
-    keys_data = load_json("../keys.json")
+    keys_data = load_file(KEYS)
 
     if input_key in keys_data.get("generated_keys", {}):
         if keys_data["generated_keys"][input_key]["status"] == "active":
             keys_data["generated_keys"][input_key]["status"] = "used"
-            save_json(keys_data, "../keys.json")
+            save_file(keys_data, KEYS)
             add_user(user_id, input_key)
             await update.message.reply_text("✅ Авторизация успешна!")
             return ConversationHandler.END
@@ -115,7 +113,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         amount = float(update.message.text.replace(",", "."))
         context.user_data["payment_data"]["amount"] = amount
         config = load_config()
-        settings = load_json("../settings.json")
+        settings = load_file(SETTINGS)
         byn_amount = round(amount * settings.get("trx_rate", config["TRX_RATE"]), 2)
 
         keyboard = [
@@ -160,7 +158,7 @@ async def confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await query.edit_message_text("❌ Неверный адрес кошелька")
             return ConversationHandler.END
 
-        wallets = load_json("../data/wallets.json").get("active", [])
+        wallets = load_file(WALLETS).get("active", [])
         selected_wallet = None
         for wallet in wallets:
             try:

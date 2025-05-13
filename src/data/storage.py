@@ -1,46 +1,26 @@
 import json
 import os
-from typing import Any
 
-DATA_DIR = "../data"
+# Константы для имен файлов
+USERS = "users.json"
+ORDERS = "orders.json"
+KEYS = "keys.json"
+WALLETS = "wallets.json"
+SETTINGS = "settings.json"
 
-def ensure_data_dir() -> None:
-    """Создает директорию data/, если она не существует."""
-    os.makedirs(DATA_DIR, exist_ok=True)
+# Путь к директории с данными
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 
-def load_json(filename: str) -> dict:
-    """
-    Читает JSON-файл из директории data/. Возвращает пустой словарь, если файл не существует.
-
-    Args:
-        filename: Имя файла (например, 'users.json').
-
-    Returns:
-        dict: Данные из файла или пустой словарь.
-    """
-    ensure_data_dir()
+def load_file(filename):
+    """Загружает данные из JSON-файла по имени."""
     path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    if not os.path.exists(path):
         return {}
+    with open(path, "r") as f:
+        return json.load(f)
 
-def save_json(data: Any, filename: str) -> None:
-    """
-    Сохраняет данные в JSON-файл в директории data/.
-
-    Args:
-        data: Данные для сохранения.
-        filename: Имя файла (например, 'users.json').
-
-    Raises:
-        OSError: Если не удалось сохранить файл.
-    """
-    ensure_data_dir()
+def save_file(data, filename):
+    """Сохраняет данные в JSON-файл по имени."""
     path = os.path.join(DATA_DIR, filename)
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except OSError as e:
-        raise OSError(f"Failed to save {filename}: {str(e)}")
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)

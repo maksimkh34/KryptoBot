@@ -1,9 +1,9 @@
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from src.data.users import is_authorized
-from src.data.storage import load_json, save_json
 from src.config import load_config
 from src.data.users import generate_auth_key
+from src.data.storage import load_file, save_file, KEYS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -40,9 +40,9 @@ async def generate_key(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     new_key = generate_auth_key()
-    keys_data = load_json("../keys.json")
+    keys_data = load_file(KEYS)
     keys_data.setdefault("generated_keys", {})[new_key] = {"status": "active"}
-    save_json(keys_data, "../keys.json")
+    save_file(keys_data, KEYS)
     await update.message.reply_text(f"🔑 Новый ключ доступа:\n`{new_key}`", parse_mode="Markdown")
 
 async def check_auth_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:

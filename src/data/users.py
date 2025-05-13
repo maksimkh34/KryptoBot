@@ -1,6 +1,6 @@
 import secrets
 import string
-from .storage import load_json, save_json
+from src.data.storage import load_file, save_file, USERS
 
 def generate_auth_key() -> str:
     """
@@ -20,9 +20,9 @@ def add_user(user_id: str, auth_key: str) -> None:
         user_id: ID пользователя.
         auth_key: Ключ авторизации.
     """
-    users = load_json("users.json")
+    users = load_file(USERS)
     users[user_id] = {"auth_key": auth_key}
-    save_json(users, "users.json")
+    save_file(users, USERS)
 
 def is_authorized(user_id: str) -> bool:
     """
@@ -34,5 +34,5 @@ def is_authorized(user_id: str) -> bool:
     Returns:
         bool: True, если пользователь авторизован, иначе False.
     """
-    users = load_json("users.json")
+    users = load_file(USERS)
     return user_id in users

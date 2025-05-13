@@ -1,6 +1,6 @@
 from telegram import Bot
 from src.config import load_config
-from src.data.storage import load_json
+from src.data.storage import load_file, WALLETS, SETTINGS
 from typing import Optional
 from tronpy.keys import PrivateKey
 
@@ -17,7 +17,7 @@ async def send_payment_receipt(bot: Bot, payment_data: dict, txid: str, username
     """
     config = load_config()
     admin_id = config["ADMIN_ID"]
-    settings = load_json("../settings.json")
+    settings = load_file(SETTINGS)
     byn_amount = round(payment_data["amount"] * settings.get("trx_rate", config["TRX_RATE"]), 2)
 
     message = (
@@ -44,7 +44,7 @@ async def send_payment_failure(bot: Bot, payment_data: dict, error: str, usernam
     """
     config = load_config()
     admin_id = config["ADMIN_ID"]
-    settings = load_json("../settings.json")
+    settings = load_file(SETTINGS)
     byn_amount = round(payment_data["amount"] * settings.get("trx_rate", config["TRX_RATE"]), 2)
 
     message = (
@@ -71,11 +71,11 @@ async def send_insufficient_funds(bot: Bot, payment_data: dict, username: str) -
 
     config = load_config()
     admin_id = config["ADMIN_ID"]
-    settings = load_json("../settings.json")
+    settings = load_file(SETTINGS)
     byn_amount = round(payment_data["amount"] * settings.get("trx_rate", config["TRX_RATE"]), 2)
 
     tron = TronWallet()
-    wallets = load_json("../wallets.json").get("active", [])
+    wallets = load_file(WALLETS).get("active", [])
     wallets_info = []
     for wallet in wallets:
         try:

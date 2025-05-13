@@ -1,6 +1,6 @@
 from datetime import datetime
 import random
-from .storage import load_json, save_json
+from .storage import load_file, save_file, ORDERS
 
 def generate_order_id() -> str:
     """
@@ -25,9 +25,9 @@ def save_order(order_data: dict) -> None:
     """
     if "order_id" not in order_data:
         raise KeyError("order_data must contain 'order_id'")
-    orders = load_json("orders.json")
+    orders = load_file(ORDERS)
     orders[order_data["order_id"]] = order_data
-    save_json(orders, "orders.json")
+    save_file(orders, ORDERS)
 
 def update_order_status(order_id: str, status: str, additional_data: dict | None = None) -> None:
     """
@@ -41,11 +41,11 @@ def update_order_status(order_id: str, status: str, additional_data: dict | None
     Raises:
         KeyError: Если заказ не найден.
     """
-    orders = load_json("orders.json")
+    orders = load_file(ORDERS)
     if order_id not in orders:
         raise KeyError(f"Order {order_id} not found")
     orders[order_id]["status"] = status
     orders[order_id]["updated_at"] = datetime.now().isoformat()
     if additional_data:
         orders[order_id].update(additional_data)
-    save_json(orders, "orders.json")
+    save_file(orders, ORDERS)
