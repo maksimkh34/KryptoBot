@@ -212,7 +212,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         # Сохраняем выбранный кошелек
         context.user_data["selected_wallet"] = selected_wallet
-        commission_note = f"\nВключена комиссия: {selected_wallet['commission']} {currency}" if selected_wallet["commission"] > 0 else ""
+        commission_note = f"\nВключена комиссия: {round_byn(selected_wallet['commission'])} {currency}" if selected_wallet["commission"] > 0 else ""
         byn_total = round_byn(selected_wallet["total_amount"] * rate)
 
         keyboard = [
@@ -225,7 +225,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"Итого: {selected_wallet['total_amount']} {currency}\n"
             f"Сумма к оплате: {byn_total} BYN\n"
             f"Курс: 1 {currency} = {rate} BYN\n\n"
-            f"Подтвердите платеж:{round_byn(commission_note)}",
+            f"Подтвердите платеж:{commission_note}",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
