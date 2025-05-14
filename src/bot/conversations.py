@@ -225,7 +225,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"Итого: {selected_wallet['total_amount']} {currency}\n"
             f"Сумма к оплате: {byn_total} BYN\n"
             f"Курс: 1 {currency} = {rate} BYN\n\n"
-            f"Подтвердите платеж:{commission_note}",
+            f"Подтвердите платеж:{round_byn(commission_note)}",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
