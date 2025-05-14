@@ -19,6 +19,7 @@ def load_config() -> dict:
         "TRON_NETWORK": _get_env_var("TRON_NETWORK", default="nile"),
         "ADMIN_ID": _get_env_var("ADMIN_ID"),
         "TRX_RATE": _get_float_env_var("TRX_RATE", default=3.25),
+        "TRONGRID_API_KEY": _get_env_var("TRONGRID_API_KEY", default=""),
     }
 
     # Валидация

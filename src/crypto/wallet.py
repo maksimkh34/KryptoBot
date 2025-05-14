@@ -32,17 +32,31 @@ class TronWallet(CryptoWallet):
     def __init__(self):
         config = load_config()
         self.network = config["TRON_NETWORK"]
+        self.api_key = config["TRONGRID_API_KEY"]
         self.client = self._get_client()
 
     def _get_client(self) -> Tron:
         """Создает клиента Tron с соответствующим провайдером."""
         providers = {
-            "mainnet": HTTPProvider("https://api.trongrid.io"),
-            "nile": HTTPProvider("https://api.nileex.io"),
+            "mainnet": "https://api.trongrid.io",
+            "nile": "https://api.nileex.io",
         }
         if self.network not in providers:
             raise ValueError(f"Unsupported network: {self.network}")
-        return Tron(provider=providers[self.network])
+
+        try:
+            # Создаем провайдер с API-ключом, если он указан
+            provider = HTTPProvider(
+                providers[self.network],
+                api_key=self.api_key if self.api_key else None
+            )
+            client = Tron(provider=provider)
+            # Проверяем подключение
+            client.get_block("latest")
+            return client
+        except Exception as e:
+            logger.error(f"Ошибка подключения к сети Tron ({self.network}): {str(e)}")
+            raise RuntimeError(f"Failed to connect to Tron network: {str(e)}")
 
     def validate_address(self, address: str) -> bool:
         """
