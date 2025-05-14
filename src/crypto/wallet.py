@@ -32,31 +32,28 @@ class TronWallet(CryptoWallet):
     def __init__(self):
         config = load_config()
         self.network = config["TRON_NETWORK"]
-        self.api_key = config["TRONGRID_API_KEY"]
+        self.api_key = config.get("DRPC_API_KEY", "")
         self.client = self._get_client()
 
     def _get_client(self) -> Tron:
-        """Создает клиента Tron с соответствующим провайдером."""
-        providers = {
-            "mainnet": "https://api.trongrid.io",
-            "nile": "https://api.nileex.io",
-        }
-        if self.network not in providers:
+        """Создает клиента Tron в зависимости от сети."""
+        if self.network == "mainnet":
+            if not self.api_key:
+                raise ValueError("DRPC_API_KEY is required for mainnet (dRPC)")
+            provider_url = f"https://lb.drpc.org/ogrpc?network=tron&dkey={self.api_key}"
+        elif self.network == "nile":
+            provider_url = "https://nile.trongrid.io"
+        else:
             raise ValueError(f"Unsupported network: {self.network}")
 
         try:
-            # Создаем провайдер с API-ключом, если он указан
-            provider = HTTPProvider(
-                providers[self.network],
-                api_key=self.api_key if self.api_key else None
-            )
+            provider = HTTPProvider(provider_url)
             client = Tron(provider=provider)
-            # Проверяем подключение
-            client.get_block("latest")
+            client.get_chain_parameters()
             return client
         except Exception as e:
-            logger.error(f"Ошибка подключения к сети Tron ({self.network}): {str(e)}")
-            raise RuntimeError(f"Failed to connect to Tron network: {str(e)}")
+            logger.error(f"Неизвестная ошибка при подключении к Tron ({self.network}): {str(e)}")
+            raise RuntimeError(f"Unexpected error connecting to Tron network: {str(e)}")
 
     def validate_address(self, address: str) -> bool:
         """
