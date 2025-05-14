@@ -431,6 +431,140 @@ async def freeze_wallets(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         parse_mode="Markdown"
     )
 
+async def add_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Добавляет новый кошелек для администратора."""
+    config = load_config()
+    if str(update.effective_user.id) != str(config["ADMIN_ID"]):
+        await update.message.reply_text("❌ Доступно только администратору!")
+        return
+
+    if not context.args:
+        await update.message.reply_text("❌ Укажите приватный ключ: /add_wallet <private_key>")
+        return
+
+    private_key = context.args[0].strip()
+    try:
+        priv_key = PrivateKey(bytes.fromhex(private_key))
+        address = priv_key.public_key.to_base58check_address()
+        wallet_class = get_wallet_class("TronWallet")
+        wallet = wallet_class()
+
+        # Проверка валидности адреса
+        if not wallet.validate_address(address):
+            await update.message.reply_text("❌ Неверный адрес кошелька!")
+            return
+
+        # Проверка, существует ли кошелек
+        wallets_data = storage.load_file(storage.WALLETS)
+        active_wallets = wallets_data.get("active", [])
+        if any(w["private_key"] == private_key for w in active_wallets):
+            await update.message.reply_text("❌ Кошелек уже существует!")
+            return
+
+        # Добавление кошелька
+        active_wallets.append({"private_key": private_key})
+        wallets_data["active"] = active_wallets
+        storage.save_file(wallets_data, storage.WALLETS)
+        await update.message.reply_text(
+            f"✅ Кошелек `{address}` успешно добавлен!",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка добавления кошелька: {str(e)}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def remove_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Удаляет кошелек по адресу или приватному ключу для администратора."""
+    config = load_config()
+    if str(update.effective_user.id) != str(config["ADMIN_ID"]):
+        await update.message.reply_text("❌ Доступно только администратору!")
+        return
+
+    if not context.args:
+        await update.message.reply_text("❌ Укажите адрес или приватный ключ: /remove_wallet <address_or_private_key>")
+        return
+
+    input_arg = context.args[0].strip()
+    try:
+        wallet_class = get_wallet_class("TronWallet")
+        wallet = wallet_class()
+        wallets_data = storage.load_file(storage.WALLETS)
+        active_wallets = wallets_data.get("active", [])
+
+        # Проверяем, является ли аргумент адресом
+        if wallet.validate_address(input_arg):
+            address = input_arg
+            # Ищем кошелек по адресу
+            initial_len = len(active_wallets)
+            active_wallets = [
+                w for w in active_wallets
+                if PrivateKey(bytes.fromhex(w["private_key"])).public_key.to_base58check_address() != address
+            ]
+            if len(active_wallets) == initial_len:
+                await update.message.reply_text("❌ Кошелек не найден!")
+                return
+        else:
+            # Проверяем, является ли аргумент приватным ключом
+            try:
+                priv_key = PrivateKey(bytes.fromhex(input_arg))
+                address = priv_key.public_key.to_base58check_address()
+                # Ищем кошелек по приватному ключу
+                initial_len = len(active_wallets)
+                active_wallets = [
+                    w for w in active_wallets
+                    if w["private_key"] != input_arg
+                ]
+                if len(active_wallets) == initial_len:
+                    await update.message.reply_text("❌ Кошелек не найден!")
+                    return
+            except ValueError:
+                await update.message.reply_text("❌ Неверный адрес или приватный ключ!")
+                return
+
+        # Сохраняем обновленный список кошельков
+        wallets_data["active"] = active_wallets
+        storage.save_file(wallets_data, storage.WALLETS)
+        await update.message.reply_text(
+            f"✅ Кошелек `{address}` успешно удален!",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.error(f"Ошибка удаления кошелька: {str(e)}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def wallets_info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает информацию о всех кошельках для администратора."""
+    config = load_config()
+    if str(update.effective_user.id) != str(config["ADMIN_ID"]):
+        await update.message.reply_text("❌ Доступно только администратору!")
+        return
+
+    wallets_data = storage.load_file(storage.WALLETS)
+    active_wallets = wallets_data.get("active", [])
+    if not active_wallets:
+        await update.message.reply_text("❌ Нет активных кошельков!")
+        return
+
+    wallet_class = get_wallet_class("TronWallet")
+    wallet = wallet_class()
+    info = ["📋 Информация о кошельках:"]
+    for w in active_wallets:
+        try:
+            priv_key = PrivateKey(bytes.fromhex(w["private_key"]))
+            address = priv_key.public_key.to_base58check_address()
+            balance = wallet.get_balance(address)
+            bandwidth = wallet.estimate_bandwidth_usage(address)
+            info.append(
+                f"▪ `{address}`\n"
+                f"   Баланс: {balance:.2f} TRX\n"
+                f"   Bandwidth: {bandwidth:.0f}"
+            )
+        except Exception as e:
+            logger.error(f"Ошибка получения данных кошелька {w.get('address', 'unknown')}: {str(e)}")
+            info.append(f"▪ Ошибка для кошелька: {str(e)}")
+
+    await update.message.reply_text("\n".join(info), parse_mode="Markdown")
+
 def get_auth_conversation() -> ConversationHandler:
     """Возвращает ConversationHandler для авторизации."""
     return ConversationHandler(

@@ -1,9 +1,9 @@
 import logging
-from telegram.ext import Application, MessageHandler, filters
+from telegram.ext import Application, MessageHandler, filters, CommandHandler
 from src.config import load_config
 from src.bot.handlers import get_handlers
-from src.bot.conversations import get_auth_conversation, get_payment_conversation
-
+from src.bot.conversations import (get_auth_conversation, get_payment_conversation, add_wallet,
+                                   remove_wallet, wallets_info)
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
@@ -29,6 +29,10 @@ def main() -> None:
 
     # Fallback для текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_fallback))
+
+    application.add_handler(CommandHandler("add_wallet", add_wallet))
+    application.add_handler(CommandHandler("remove_wallet", remove_wallet))
+    application.add_handler(CommandHandler("wallets_info", wallets_info))
 
     application.run_polling()
 
