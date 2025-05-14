@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from decimal import Decimal
 import logging
+
+import requests
 from tronpy import Tron
 from tronpy.keys import PrivateKey
 from tronpy.providers import HTTPProvider
@@ -32,25 +34,31 @@ class TronWallet(CryptoWallet):
     def __init__(self):
         config = load_config()
         self.network = config["TRON_NETWORK"]
-        self.api_key = config.get("DRPC_API_KEY", "")
+        self.api_key = config.get("TRONGRID_API_KEY", "")
         self.client = self._get_client()
 
     def _get_client(self) -> Tron:
         """Создает клиента Tron в зависимости от сети."""
         if self.network == "mainnet":
             if not self.api_key:
-                raise ValueError("DRPC_API_KEY is required for mainnet (dRPC)")
-            provider_url = f"https://lb.drpc.org/ogrpc?network=tron&dkey={self.api_key}"
+                raise ValueError("TRONGRID_API_KEY is required for mainnet (TronGrid)")
+            provider_url = "https://api.trongrid.io"
         elif self.network == "nile":
             provider_url = "https://nile.trongrid.io"
         else:
             raise ValueError(f"Unsupported network: {self.network}")
 
         try:
-            provider = HTTPProvider(provider_url)
+            provider = HTTPProvider(provider_url, api_key=self.api_key if self.network == "mainnet" else None)
             client = Tron(provider=provider)
-            client.get_chain_parameters()
+            # Проверка подключения
+            client.get_block(0)  # Запрашиваем генезис-блок
+            logger.info(f"Connected to Tron network: {self.network}")
             return client
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"Ошибка подключения к сети Tron ({self.network}): {str(e)}")
+            raise RuntimeError(
+                f"Failed to connect to Tron network: {str(e)}. Check TRONGRID_API_KEY for mainnet or network availability for nile")
         except Exception as e:
             logger.error(f"Неизвестная ошибка при подключении к Tron ({self.network}): {str(e)}")
             raise RuntimeError(f"Unexpected error connecting to Tron network: {str(e)}")
