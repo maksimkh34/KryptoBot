@@ -1,5 +1,7 @@
 import logging
 from datetime import datetime
+
+import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     CommandHandler,
@@ -17,7 +19,10 @@ from src.crypto.factory import get_wallet_class
 from src.bot.notifications import send_payment_receipt, send_payment_failure, send_insufficient_funds, send_key_activation_notification
 from src.data.utils import round_byn
 from tronpy.keys import PrivateKey
-
+import logging
+from telegram import Update
+from telegram.ext import ContextTypes
+from src.crypto.wallet import TronWallet
 logger = logging.getLogger(__name__)
 
 # Состояния для авторизации
@@ -25,6 +30,48 @@ AUTH_KEY = 0
 
 # Состояния для платежа
 CURRENCY, WALLET, AMOUNT, CONFIRMATION = range(1, 5)
+
+async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Показывает максимальный баланс среди всех кошельков для оплаты."""
+    logger = logging.getLogger(__name__)
+    logger.info(f"Пользователь {update.effective_user.id} запросил максимальный баланс")
+
+    try:
+        # Загружаем кошельки из wallets.json
+        wallets_data = storage.load_file(storage.WALLETS).get("active", [])
+
+        if not wallets_data:
+            logger.info("Кошельки не найдены")
+            await update.message.reply_text("Кошельки не найдены")
+            return
+
+        max_balance = 0
+        wallet_class = get_wallet_class("TronWallet")
+        wallet = wallet_class()
+        # Проверяем баланс каждого кошелька
+        for wallet_data in wallets_data:
+            priv_key = PrivateKey(bytes.fromhex(wallet_data['private_key']))
+            address = priv_key.public_key.to_base58check_address()
+            w_balance = wallet.get_balance(address)
+            logger.debug(f"Баланс кошелька {w_balance}...: {balance} TRX")
+
+            if w_balance > max_balance:
+                max_balance = w_balance
+
+        # Форматируем сумму с 6 знаками после запятой (стандарт для TRX)
+        formatted_balance = f"{max_balance}"
+        logger.info(f"Максимальный баланс: {formatted_balance} TRX")
+        await update.message.reply_text(f"Максимальная сумма для оплаты: {formatted_balance} TRX")
+
+    except FileNotFoundError:
+        logger.error("Файл wallets.json не найден")
+        await update.message.reply_text("Ошибка: Кошельки не найдены")
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Ошибка подключения к Tron: {str(e)}")
+        await update.message.reply_text("Ошибка подключения к сети Tron")
+    except Exception as e:
+        logger.error(f"Неизвестная ошибка при получении баланса: {str(e)}")
+        await update.message.reply_text("Произошла ошибка при получении баланса")
 
 async def auth_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает процесс авторизации."""
