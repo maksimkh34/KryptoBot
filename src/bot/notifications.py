@@ -1,6 +1,7 @@
 from telegram import Bot
 from src.config import load_config
 from src.data import storage
+from src.data.logger import logger
 from src.data.utils import round_byn
 from typing import Optional
 from tronpy.keys import PrivateKey
@@ -34,7 +35,7 @@ async def send_payment_receipt(
     currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
     currency_name = currency_info["name"] if currency_info else currency
     rate_key = currency_info["rate_key"] if currency_info else "trx_rate"
-    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, config["TRX_RATE"]))
+    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, -1))
 
     commission_note = f"\nВключена комиссия: {commission} {currency_name}" if commission > 0 else ""
     message = (
@@ -48,7 +49,13 @@ async def send_payment_receipt(
         f"💵 Сумма BYN: {byn_amount}\n"
         f"🔗 TXID: `{txid}`{commission_note}"
     )
-    await bot.send_message(chat_id=admin_id, text=message, parse_mode="Markdown")
+    try:
+        sent_message = await bot.send_message(chat_id=admin_id, text=message, parse_mode="Markdown")
+        await bot.pin_chat_message(chat_id=admin_id, message_id=sent_message.message_id, disable_notification=True)
+        logger.info(f"Уведомление о платеже (TXID: {txid}) отправлено и закреплено для admin_id {admin_id}")
+    except Exception as e:
+        logger.error(f"Ошибка при отправке или закреплении уведомления о платеже (TXID: {txid}): {str(e)}")
+        raise
 
 async def send_payment_failure(
     bot: Bot,
@@ -78,7 +85,7 @@ async def send_payment_failure(
     currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
     currency_name = currency_info["name"] if currency_info else currency
     rate_key = currency_info["rate_key"] if currency_info else "trx_rate"
-    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, config["TRX_RATE"]))
+    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, -1))
 
     commission_note = f"\nВключена комиссия: {commission} {currency_name}" if commission > 0 else ""
     message = (
@@ -112,7 +119,7 @@ async def send_insufficient_funds(bot: Bot, payment_data: dict, username: str) -
     currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
     currency_name = currency_info["name"] if currency_info else currency
     rate_key = currency_info["rate_key"] if currency_info else "trx_rate"
-    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, config["TRX_RATE"]))
+    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, -1))
 
     wallet_class = get_wallet_class(currency_info["wallet_class"] if currency_info else "TronWallet")
     wallet = wallet_class()

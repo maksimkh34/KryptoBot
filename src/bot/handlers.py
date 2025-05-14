@@ -1,14 +1,11 @@
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
-
 from src.data import storage
 from src.data.users import is_authorized
 from src.config import load_config
 from src.data.users import generate_auth_key
 from src.data.storage import load_file, save_file, KEYS
-import logging
 
-logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """

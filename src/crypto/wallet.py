@@ -1,14 +1,13 @@
+import requests
+
 from abc import ABC, abstractmethod
 from decimal import Decimal
-import logging
-
-import requests
 from tronpy import Tron
 from tronpy.keys import PrivateKey
 from tronpy.providers import HTTPProvider
 from src.config import load_config
+from src.data.logger import logger
 
-logger = logging.getLogger(__name__)
 
 class CryptoWallet(ABC):
     """Абстрактный базовый класс для криптовалютных кошельков."""

@@ -1,5 +1,6 @@
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
 from typing import Optional
 
 def load_config() -> dict:
@@ -19,7 +20,6 @@ def load_config() -> dict:
         "TRON_NETWORK": _get_env_var("TRON_NETWORK", default="nile"),
         "ADMIN_ID": _get_env_var("ADMIN_ID"),
         "DRPC_API_KEY": _get_env_var("DRPC_API_KEY"),
-        "TRX_RATE": _get_float_env_var("TRX_RATE", default=3.25),
         "TRONGRID_API_KEY": _get_env_var("TRONGRID_API_KEY", default=""),
     }
 
@@ -30,8 +30,6 @@ def load_config() -> dict:
         raise ValueError("TRON_NETWORK must be 'nile' or 'mainnet'")
     if not config["ADMIN_ID"].isdigit():
         raise ValueError("ADMIN_ID must be a valid Telegram user ID")
-    if config["TRX_RATE"] <= 0:
-        raise ValueError("TRX_RATE must be a positive number")
 
     return config
 

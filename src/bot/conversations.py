@@ -1,29 +1,26 @@
-import logging
-from datetime import datetime
-
 import requests
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
-    ConversationHandler,
-    CallbackQueryHandler,
-)
+
+from datetime import datetime
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from src.config import load_config
 from src.data import storage
 from src.data.orders import generate_order_id, save_order, update_order_status
+from src.data.logger import logger
 from src.data.users import add_user
 from src.crypto.factory import get_wallet_class
 from src.bot.notifications import send_payment_receipt, send_payment_failure, send_insufficient_funds, send_key_activation_notification
 from src.data.utils import round_byn
 from tronpy.keys import PrivateKey
-import logging
 from telegram import Update
 from telegram.ext import ContextTypes
-from src.crypto.wallet import TronWallet
-logger = logging.getLogger(__name__)
+
+from telegram.ext import (
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ConversationHandler,
+    CallbackQueryHandler,
+)
 
 # Состояния для авторизации
 AUTH_KEY = 0
@@ -33,7 +30,6 @@ CURRENCY, WALLET, AMOUNT, CONFIRMATION = range(1, 5)
 
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Показывает максимальный баланс среди всех кошельков для оплаты."""
-    logger = logging.getLogger(__name__)
     logger.info(f"Пользователь {update.effective_user.id} запросил максимальный баланс")
 
     try:
@@ -190,15 +186,15 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return ConversationHandler.END
 
         rate_key = currency_info["rate_key"]
-        rate = settings.get(rate_key, config.get("TRX_RATE", 3.25))
+        rate = settings.get(rate_key, -1)
         byn_amount = round_byn(amount * rate)
 
         # Выбор кошелька и расчет комиссии
         wallet_class = get_wallet_class(currency_info["wallet_class"])
         wallet = wallet_class()
         wallets = storage.load_file(storage.WALLETS).get("active", [])
-        BANDWIDTH_REQUIRED = 270
-        BANDWIDTH_FEE_PER_POINT = 0.001
+        bandwidth_required = 270
+        bandwidth_fee_per_point = 0.001
         sufficient_bandwidth_wallets = []
         insufficient_bandwidth_wallets = []
 
@@ -208,7 +204,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 address = priv_key.public_key.to_base58check_address()
                 balance = wallet.get_balance(address)
                 bandwidth = wallet.estimate_bandwidth_usage(address)
-                commission = (BANDWIDTH_REQUIRED - bandwidth) * BANDWIDTH_FEE_PER_POINT if bandwidth < BANDWIDTH_REQUIRED else 0
+                commission = (bandwidth_required - bandwidth) * bandwidth_fee_per_point if bandwidth < bandwidth_required else 0
                 total_amount = amount + commission
 
                 if balance >= total_amount:
@@ -220,7 +216,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                         "commission": commission,
                         "total_amount": total_amount
                     }
-                    if bandwidth >= BANDWIDTH_REQUIRED:
+                    if bandwidth >= bandwidth_required:
                         sufficient_bandwidth_wallets.append(wallet_info)
                     else:
                         insufficient_bandwidth_wallets.append(wallet_info)
@@ -235,7 +231,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 key=lambda w: w["balance"] - w["total_amount"],
                 default=None
             )
-            logger.info(f"Выбран кошелек {selected_wallet['address']} с bandwidth {selected_wallet['bandwidth']} >= {BANDWIDTH_REQUIRED}")
+            logger.info(f"Выбран кошелек {selected_wallet['address']} с bandwidth {selected_wallet['bandwidth']} >= {bandwidth_required}")
         elif insufficient_bandwidth_wallets:
             selected_wallet = min(
                 insufficient_bandwidth_wallets,
@@ -243,7 +239,7 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 default=None
             )
             logger.info(
-                f"Выбран кошелек {selected_wallet['address']} с bandwidth {selected_wallet['bandwidth']} < {BANDWIDTH_REQUIRED}, "
+                f"Выбран кошелек {selected_wallet['address']} с bandwidth {selected_wallet['bandwidth']} < {bandwidth_required}, "
                 f"комиссия {selected_wallet['commission']} TRX"
             )
 

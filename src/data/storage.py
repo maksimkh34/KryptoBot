@@ -1,6 +1,7 @@
 import json
 import os
-import logging
+
+from src.data.logger import logger
 
 # Константы для имен файлов
 USERS = "users.json"
@@ -12,7 +13,6 @@ SETTINGS = "settings.json"
 # Путь к директории с данными
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
 
-logger = logging.getLogger(__name__)
 
 def load_file(filename):
     """Загружает данные из JSON-файла по имени."""

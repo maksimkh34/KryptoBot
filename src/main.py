@@ -1,13 +1,8 @@
-import logging
 from telegram.ext import Application, MessageHandler, filters, CommandHandler
 from src.config import load_config
 from src.bot.handlers import get_handlers
 from src.bot.conversations import (get_auth_conversation, get_payment_conversation, add_wallet,
                                    remove_wallet, wallets_info, balance)
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
 
 async def text_fallback(update, context) -> None:
     """Обрабатывает текстовые сообщения, требующие авторизации."""

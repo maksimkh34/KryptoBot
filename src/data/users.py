@@ -1,5 +1,6 @@
 import secrets
 import string
+
 from src.data.storage import load_file, save_file, USERS
 
 def generate_auth_key() -> str:
