@@ -255,7 +255,8 @@ async def process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         # Сохраняем выбранный кошелек
         context.user_data["selected_wallet"] = selected_wallet
-        commission_note = f"\nВключена комиссия: {round_byn(selected_wallet['commission'])} {currency}" if selected_wallet["commission"] > 0 else ""
+        commission_note = (f"\nВключена комиссия: {round_byn(selected_wallet['commission'])}"
+                           f" {currency}") if selected_wallet["commission"] > 0 else ""
         byn_total = round_byn(selected_wallet["total_amount"] * rate)
 
         keyboard = [
@@ -380,12 +381,15 @@ async def confirm_payment(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             selected_wallet["commission"],
             selected_wallet["total_amount"]
         )
-        commission_note = f"\nВключена комиссия за: {selected_wallet['commission']} TRX" if selected_wallet["commission"] > 0 else ""
+        rate_key = currency_info["rate_key"]
+        rate = settings.get(rate_key, -1)
+        commission_note = f"\nВключена комиссия: {selected_wallet['commission']} TRX" if selected_wallet["commission"] > 0 else ""
         await query.edit_message_text(
             f"✅ Платеж успешно выполнен!\n"
             f"Сумма: {payment_data['amount']} {currency}\n"
             f"Комиссия: {selected_wallet['commission']} {currency}\n"
-            f"Итого: {selected_wallet['total_amount']} {currency}\n"
+            f"Итого: {selected_wallet['total_amount']} "
+            f"{currency} ({round_byn(float(selected_wallet['total_amount'] * rate))} BYN)\n"
             f"TXID: `{txid}`{commission_note}",
             parse_mode="Markdown"
         )
