@@ -35,7 +35,7 @@ async def send_payment_receipt(
     currency_info = next((c for c in settings.get("currencies", []) if c["code"] == currency), None)
     currency_name = currency_info["name"] if currency_info else currency
     rate_key = currency_info["rate_key"] if currency_info else "trx_rate"
-    byn_amount = round_byn(payment_data["amount"] * settings.get(rate_key, -1))
+    byn_amount = round_byn((payment_data["amount"] + commission) * settings.get(rate_key, -1))
 
     commission_note = f"\nВключена комиссия: {commission} {currency_name}" if commission > 0 else ""
     message = (
