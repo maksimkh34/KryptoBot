@@ -12,4 +12,6 @@ def round_byn(amount, base=5):
     Returns:
         Decimal: Округленная сумма.
     """
+    if amount <= 10:
+        return Decimal(amount).quantize(Decimal('0.1'), rounding=ROUND_UP)
     return base * Decimal(amount / base).quantize(Decimal('0.1'), rounding=ROUND_UP)
