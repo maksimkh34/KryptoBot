@@ -3,3 +3,4 @@ tronpy
 python-dotenv
 pytest
 requests
+colorama
