@@ -1,6 +1,8 @@
 import logging
 from datetime import datetime
 from logging import Formatter, StreamHandler, FileHandler
+from pathlib import Path
+
 from colorama import init, Fore, Style
 from src.config.directories import get_root
 from src.config.env import get_env_var
@@ -10,7 +12,6 @@ init()
 
 
 class ConsoleColorFormatter(Formatter):
-    """Кастомный форматтер для консоли с цветами для разных блоков лога и уровня."""
 
     LEVEL_MAP = {
         logging.DEBUG: ("DBG", Fore.LIGHTBLACK_EX),
@@ -41,7 +42,6 @@ class ConsoleColorFormatter(Formatter):
 
 
 class FileFormatter(Formatter):
-    """Кастомный форматтер для файла без цветовых кодов."""
 
     LEVEL_MAP = {
         logging.DEBUG: "DBG",
@@ -60,46 +60,43 @@ class FileFormatter(Formatter):
         message = record.getMessage()
         return f"{timestamp} [{level}] {{{module}.py}} ({function}) [ln #{line}]: {message}"
 
-
 def setup_logger() -> logging.Logger:
-    """
-    Настраивает и возвращает единый логгер для всей программы.
+    _logger = logging.getLogger("main")
+    _logger.setLevel(logging.DEBUG)
 
-    Returns:
-        Logger: Настроенный логгер.
-    """
-    # Получаем единый логгер с фиксированным именем
-    logger = logging.getLogger("mybot")
-    logger.setLevel(logging.DEBUG)
+    _logger.handlers.clear()
 
-    # Удаляем существующие обработчики
-    logger.handlers.clear()
+    log_level = get_env_var("LOGLVL", default="cf").lower()
 
-    # Получаем уровень вывода логов из .env
-    loglvl = get_env_var("LOGLVL", default="cf").lower()
-
-    # Формируем имя файла логов: YYYY.MM.DD.HH.MM.SS.log
     timestamp = datetime.now().strftime("%Y.%m.%d.%H.%M.%S")
-    log_file = f"logs/{timestamp}.log"
-    log_path = get_root() / log_file
+    log_file = f"{timestamp}.log"
+    log_path = get_root() / "logs" / log_file
 
-    # Создаем директорию для логов
-    log_path.parent.mkdir(exist_ok=True)
+    Path(log_path).resolve().parent.mkdir(exist_ok=True)
 
-    # Настройка обработчиков в зависимости от LOGLVL
-    if "c" in loglvl:
+    if "c" in log_level:
         console_handler = StreamHandler()
-        console_handler.setLevel(logging.DEBUG)
+        if "d" in log_level:
+            console_level = logging.DEBUG
+        elif "l" in log_level:
+            console_level = logging.INFO
+        else:
+            console_level = logging.WARNING
+        console_handler.setLevel(console_level)
         console_handler.setFormatter(ConsoleColorFormatter())
-        logger.addHandler(console_handler)
+        _logger.addHandler(console_handler)
 
-    if "f" in loglvl:
-        file_handler = FileHandler(log_path, encoding="utf-8")
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(FileFormatter())
-        logger.addHandler(file_handler)
+    if "f" in log_level:
+        try:
+            file_handler = FileHandler(log_path, encoding="utf-8")
+            file_handler.setLevel(logging.DEBUG)
+            file_handler.setFormatter(FileFormatter())
+            _logger.addHandler(file_handler)
+        except Exception as e:
+            _logger.error(f"Failed to create FileHandler for {log_path}: {str(e)}")
+            raise
 
-    if not logger.handlers:
+    if not _logger.handlers:
         raise ValueError("No valid log handlers configured: 'LOGLVL' must contain 'c' and/or 'f'")
 
-    return logger
+    return _logger
