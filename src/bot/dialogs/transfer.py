@@ -7,9 +7,11 @@ from telegram.ext import (
     filters,
 )
 
+from src.bot.middleware import require_account
 from src.config.env.env import get_env_var
 from src.core.account.AccountManager import AccountManager, account_manager
 from src.core.currency.Amount import Amount
+from src.core.exceptions.AccountIsBlocked import AccountIsBlocked
 from src.core.exceptions.AccountNotFound import AccountNotFound
 from src.util.logger import logger
 from datetime import datetime
@@ -18,7 +20,7 @@ import uuid
 # Состояния диалога
 RECIPIENT, AMOUNT = range(2)
 
-
+@require_account
 async def start_transfer(update: Update, context: CallbackContext) -> int:
     user = update.effective_user
     if not user:
@@ -140,6 +142,14 @@ async def receive_amount(update: Update, context: CallbackContext) -> int:
                 reply_markup=ReplyKeyboardRemove(),
             )
             logger.error(f"Transfer failed for {tg_id}: insufficient funds")
+        return ConversationHandler.END
+    except AccountIsBlocked as e:
+        await update.message.reply_text(
+            "❌ *Ошибка: аккаунт заблокирован*",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        logger.error(f"Access from blocked account: {tg_id}")
         return ConversationHandler.END
     except ValueError as e:
         logger.warning(f"Invalid amount input {amount_input} by {tg_id}: {e}")

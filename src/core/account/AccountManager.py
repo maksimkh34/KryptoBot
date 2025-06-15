@@ -54,7 +54,7 @@ class AccountManager:
             return 99999999999999
         return float(f"{self.find_account(tg_id).get_balance():.2f}")
 
-    def add_account(self, tg_id: int, init_balance: int = 0, is_blocked: bool = False) -> Account:
+    def add_account(self, tg_id: int, init_balance: int = 0, is_blocked: bool = True) -> Account:
         if self.find_account(tg_id):
             logger.error(f"Account with tg_id={tg_id} already exists")
             raise ValueError(f"Account with tg_id={tg_id} already exists")
