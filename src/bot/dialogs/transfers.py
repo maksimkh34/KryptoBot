@@ -151,7 +151,6 @@ async def receive_amount(update: Update, context: CallbackContext) -> int:
         return AMOUNT
 
 async def cancel(update: Update, context: CallbackContext) -> int:
-    """Обрабатывает команду /cancel."""
     user = update.effective_user
     tg_id = user.id
     username = user.username or f"User{tg_id}"
@@ -167,7 +166,6 @@ def generate_transaction_id():
     return str(uuid.uuid4())[:8]
 
 def get_transfer_conversation():
-    """Возвращает ConversationHandler для диалога перевода."""
     return ConversationHandler(
         entry_points=[CommandHandler("transfer", start_transfer)],
         states={
