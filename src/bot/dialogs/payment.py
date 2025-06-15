@@ -93,7 +93,7 @@ async def receive_amount(update: Update, context: CallbackContext):
         address = context.user_data["address"]
         context.user_data["amount_byn"] = amount.get_byn_amount()
         context.user_data["amount_trx"] = amount_trx
-        fee = 0
+        fee = Amount(0)
         if not tron_manager.can_transfer_without_fees():
             fee = get_fee()
 
@@ -122,9 +122,9 @@ async def receive_amount(update: Update, context: CallbackContext):
 
         return CONFIRMATION
 
-    except:
+    except ValueError as e:
         await update.message.reply_text(
-            "❌ *Перевод отменен*. Неверная сумма",
+            "❌ *Перевод отменен*. Неверная сумма\n\n" + str(e.args),
             parse_mode="Markdown",
             reply_markup=ReplyKeyboardRemove(),
         )
