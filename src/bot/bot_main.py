@@ -1,5 +1,5 @@
 from telegram.ext import Application
-from src.util.instances import logger
+from src.util.logger.instance import logger
 from src.bot.handlers import *
 import src.config.env
 

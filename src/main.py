@@ -1,5 +1,6 @@
 from src.bot.bot_main import start_bot
-from src.util.instances import logger
+from src.util.instances.logger import logger
+
 
 def main():
     logger.info("main started")

@@ -1,3 +1,4 @@
-from src.util.logger import get_logger
+import src.config.files
+from src.database.JsonFileStorage import JsonFileStorage
 
-logger = get_logger()
+trx_config = JsonFileStorage(src.config.files.get_trx_config_filename(), default_value=[])
