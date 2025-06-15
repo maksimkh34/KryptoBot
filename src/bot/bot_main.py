@@ -17,5 +17,3 @@ def start_bot():
 
     logger.debug("polling...")
     app.run_polling()
-
-start_bot()

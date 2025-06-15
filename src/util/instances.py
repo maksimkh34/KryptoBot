@@ -1,3 +1,3 @@
-from src.util.logger import setup_logger
+from src.util.logger import get_logger
 
-logger = setup_logger()
+logger = get_logger()
