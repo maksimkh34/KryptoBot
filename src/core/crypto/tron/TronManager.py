@@ -72,4 +72,12 @@ class TronManager:
     def can_transfer_without_fees(self):
         return len(self.get_no_fees_wallets()) > 0
 
+    def get_max_payment_amount(self):
+        max_balance = -1
+        for wallet in self.storage.data:
+            balance = self.client.get_balance(wallet.get_address())
+            if balance > max_balance:
+                max_balance = balance
+        return max_balance
+
 tron_manager = TronManager()

@@ -24,7 +24,6 @@ async def account_check(update: Update) -> bool:
     tg_id = update.effective_user.id
     username = update.effective_user.username
 
-    # Проверяем аккаунт
     account = account_manager.find_account(tg_id)
 
     if account is None:

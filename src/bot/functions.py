@@ -1,4 +1,5 @@
 from src.bot.middleware import require_account, admin_command
+from src.core.crypto.tron.TronManager import tron_manager
 from src.util.logger import logger
 from src.core.account.AccountManager import account_manager
 
@@ -14,3 +15,18 @@ async def get_account_balance(update, context):
         await context.bot.send_message(text="🛡️ ADMIN", chat_id=update.effective_user.id)
         return
     await context.bot.send_message(text=f"💰 Баланс: {balance} BYN", chat_id=update.effective_user.id)
+
+async def get_max_payment_amount(update, context):
+
+    await context.bot.send_message(text=f"Максимальная сумма для оплаты: {tron_manager.get_max_payment_amount()}",
+                                   chat_id=update.effective_user.id)
+
+@admin_command
+async def get_wallets_info(update, context):
+    msg = ""
+    for wallet in tron_manager.wallets:
+        msg += (f"Wallet: {wallet.get_address()}\n"
+                f"Balance: {tron_manager.client.get_balance(wallet.get_address())}\n"
+                f"Bandwidth: {tron_manager.client.estimate_bandwidth_usage(wallet.get_address())}\n\n\n")
+
+    await context.bot.send_message(text=msg, chat_id=update.effective_user.id)
