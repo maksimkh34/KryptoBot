@@ -68,12 +68,11 @@ class AccountManager:
     def transfer(self, from_tg_id: int, to_tg_id: int, amount: Amount) -> bool:
         logger.debug(f"Creating transaction for {amount.get_byn_amount()} from {from_tg_id} to {to_tg_id}")
 
-
         to_account = self.find_account(to_tg_id)
 
         if type(to_account) is not Account.Account:
-            logger.error(f"Transaction receiver [id {to_tg_id}] not found. ")
-            raise AccountNotFound(f"Account [id {to_tg_id}] not found. ")
+            self.add_account(to_tg_id)
+            to_account = self.find_account(to_tg_id)
 
         if to_account.is_blocked():
             logger.error(f"Transaction sender [id {to_tg_id}] is blocked. ")
