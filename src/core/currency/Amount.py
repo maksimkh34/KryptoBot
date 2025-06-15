@@ -10,7 +10,7 @@ class Amount:
         self._BYN = amount_byn
 
     def get_byn_amount(self):
-        return self._BYN
+        return float(f"{self._BYN:.2f}")
 
     def get_to_trx(self):
         rate = Decimal(str(src.util.configs.trx_config.data['to_trx_rate']))

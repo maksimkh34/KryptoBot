@@ -91,10 +91,21 @@ async def receive_amount(update: Update, context: CallbackContext):
         address = context.user_data["address"]
         context.user_data["amount_byn"] = amount.get_byn_amount()
         context.user_data["amount_trx"] = amount_trx
-
         fee = 0
         if not tron_manager.can_transfer_without_fees():
             fee = get_fee()
+
+        total_byn = f"{(amount.get_byn_amount() + fee.get_byn_amount()):.2f}"
+        context.user_data["total_byn"] = total_byn
+
+        if not account_manager.can_pay(tg_id, amount):
+            await update.message.reply_text(
+                f"❌ *Перевод отменен*. Недостаточно средств (нужно: {total_byn}, "
+                f"баланс: {account_manager.get_byn_balance(tg_id)})",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            return ConversationHandler.END
 
         await update.message.reply_text(
             "✅ *Подтвердите перевод*:\n\n"
@@ -136,12 +147,30 @@ async def confirm_transaction(update: Update, context: CallbackContext) -> int:
         tron_manager.pay(address, amount_from_trx(amount))
         logger.info(f"Transaction confirmed: {amount:.2f} TRX to {address}")
 
+        account_manager.subtract_from_balance(tg_id, Amount(float(context.user_data["total_byn"])))
+
         await update.message.reply_text(
             f"Перевод выполнен:\n"
             f"Сумма: {amount:.2f} TRX\n"
-            f"Получатель: {address}",
+            f"Получатель: {address}\n"
+            f"Баланс: {account_manager.get_byn_balance(tg_id):.2f}",
             reply_markup=ReplyKeyboardRemove(),
         )
+        admin_id = get_env_var("ADMIN_ID")
+        admin_message = (
+            f"🔔 *Новый платеж 🔔*\n\n"
+            f"Отправитель: `{tg_id}`\n"
+            f"Получатель: `{address}`\n"
+            f"Сумма: *{context.user_data["total_byn"]} BYN*\n"
+            f"Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} \n\n"
+        )
+        sent_message = await context.bot.send_message(
+            chat_id=admin_id,
+            text=admin_message,
+            parse_mode="Markdown"
+        )
+        await context.bot.pin_chat_message(chat_id=admin_id,
+                                           message_id=sent_message.message_id, disable_notification=True)
         return ConversationHandler.END
     else:
         await update.message.reply_text(

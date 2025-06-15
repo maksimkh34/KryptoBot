@@ -14,7 +14,7 @@ from src.core.is_admin import is_admin
 
 logger = src.util.logger.logger
 
-MAX_DEPT = 5
+MAX_DEPT = -5
 
 class AccountManager:
     def __init__(self, storage: JsonFileStorage = None):
@@ -51,8 +51,8 @@ class AccountManager:
 
     def get_byn_balance(self, tg_id):
         if is_admin(tg_id):
-            return -1
-        return self.find_account(tg_id).get_balance()
+            return 99999999999999
+        return float(f"{self.find_account(tg_id).get_balance():.2f}")
 
     def add_account(self, tg_id: int, init_balance: int = 0, is_blocked: bool = False) -> Account:
         if self.find_account(tg_id):
@@ -90,7 +90,7 @@ class AccountManager:
                 logger.error(f"Transaction sender [id {from_tg_id}] is blocked. ")
                 raise AccountIsBlocked(f"Transaction sender [id {from_tg_id}] is blocked. ")
 
-            if from_account.get_balance() - amount.get_byn_amount() < MAX_DEPT * -1:
+            if from_account.get_balance() - amount.get_byn_amount() < MAX_DEPT:
                 logger.error(f"Account {from_tg_id} tried to transfer {amount} while balance "
                              f"is {from_account.get_balance()}")
                 return False
@@ -107,5 +107,19 @@ class AccountManager:
         logger.info(f"Transferred {amount} from {from_tg_id} to {to_tg_id}")
         return True
 
+    def get_reminder(self, tg_id: int, amount: Amount):
+        account = self.find_account(tg_id)
+        if is_admin(tg_id):
+            return Amount(9999999999)
+        reminder = float(f"{(account.get_balance()-amount.get_byn_amount()):.2f}")
+        return Amount(reminder)
+
+    def can_pay(self, tg_id: int, amount: Amount):
+        return self.get_reminder(tg_id, amount).get_byn_amount() >= MAX_DEPT
+
+    def subtract_from_balance(self, tg_id, amount: Amount):
+        account = self.find_account(tg_id)
+        account.modify_balance(-1 * amount.get_byn_amount())
+        self.storage.data = self.accounts
 
 account_manager = AccountManager()
