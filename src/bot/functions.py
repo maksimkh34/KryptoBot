@@ -1,7 +1,6 @@
-from src.bot.middleware import require_account
+from src.bot.middleware import require_account, admin_command
 from src.util.logger import logger
 from src.core.account.AccountManager import account_manager
-
 
 async def start(update, context):
     logger.log(f"Пользователь {update.effective_user.id} отправил команду /start")

@@ -10,6 +10,7 @@ from src.core.exceptions.AccountNotFound import AccountNotFound
 from src.database.JsonFileStorage import JsonFileStorage
 from src.config.env.env import get_env_var
 from src.config.env.var_names import ADMIN_ID
+from src.core.is_admin import is_admin
 
 logger = src.util.logger.logger
 
@@ -49,7 +50,7 @@ class AccountManager:
         return self.find_account(tg_id).is_blocked()
 
     def get_byn_balance(self, tg_id):
-        if tg_id == int(get_env_var(ADMIN_ID)):
+        if is_admin(tg_id):
             return -1
         return self.find_account(tg_id).get_balance()
 
@@ -79,7 +80,7 @@ class AccountManager:
             raise AccountIsBlocked(f"Transaction sender [id {to_tg_id}] is blocked. ")
 
 
-        if not from_tg_id == int(get_env_var(ADMIN_ID)):
+        if not is_admin(from_tg_id):
             from_account = self.find_account(from_tg_id)
 
             if type(from_account) is not Account.Account:
