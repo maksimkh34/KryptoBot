@@ -19,6 +19,9 @@ def start_bot():
     app = Application.builder().token(token).build()
 
     app.add_handler(ch_start)
+    app.add_handler(ch_block)
+    app.add_handler(ch_unblock)
+    app.add_handler(ch_get_id)
     app.add_handler(ch_get_account_balance)
     app.add_handler(ch_max_amount)
     app.add_handler(ch_wallets_info)

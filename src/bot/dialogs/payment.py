@@ -7,6 +7,7 @@ from telegram.ext import (
     filters,
 )
 
+from src.bot.middleware import require_account
 from src.config.env.env import get_env_var
 from src.core.account.AccountManager import AccountManager, account_manager
 from src.core.crypto.tron.TronClient import get_fee
@@ -18,6 +19,7 @@ from datetime import datetime
 
 ADDRESS, AMOUNT, CONFIRMATION = range(3)
 
+@require_account
 async def start_payment(update: Update, context: CallbackContext):
     user = update.effective_user
     if not user:

@@ -5,7 +5,7 @@ from src.core.account.AccountManager import account_manager
 
 async def start(update, context):
     logger.log(f"Пользователь {update.effective_user.id} отправил команду /start")
-    await update.message.reply_text("Привет! Это бот для работы с TRX.")
+    await update.message.reply_text("Бот Додеп")
 
 @require_account
 async def get_account_balance(update, context):
@@ -30,3 +30,23 @@ async def get_wallets_info(update, context):
                 f"Bandwidth: {tron_manager.client.estimate_bandwidth_usage(wallet.get_address())}\n\n\n")
 
     await context.bot.send_message(text=msg, chat_id=update.effective_user.id)
+
+@admin_command
+async def block(update, context):
+    tg_id = update.effective_message.text.replace('/block ', '')
+    account_manager.block(int(tg_id))
+    await context.bot.send_message(text=f"Пользователь заблокирован.",
+                                   chat_id=update.effective_user.id)
+
+@admin_command
+async def unblock(update, context):
+    tg_id = update.effective_message.text.replace('/unblock ', '')
+    account_manager.unblock(int(tg_id))
+    await context.bot.send_message(text=f"Пользователь разблокирован.",
+                                   chat_id=update.effective_user.id)
+
+async def get_id(update, context):
+    await update.message.reply_text(
+        f"ID: `{update.effective_user.id}`",
+        parse_mode="Markdown",
+    )
