@@ -32,7 +32,7 @@ class TronManager:
 
 
         wallets_new = {}
-        min_reminder = self.client.get_balance(wallets[0].get_address())
+        min_reminder = 9999999999999999999
 
         for wallet in wallets:
             if self.client.get_balance(wallet.get_address()) > amount.get_to_trx():

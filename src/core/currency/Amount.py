@@ -5,14 +5,18 @@ import src.util.configs
 
 class Amount:
     _BYN = 0
+    fixed_trx = 0
 
-    def __init__(self, amount_byn: float = 0):
+    def __init__(self, amount_byn: float = 0, fixed_trx=None):
         self._BYN = amount_byn
+        self.fixed_trx = 0 if fixed_trx is None else fixed_trx
 
     def get_byn_amount(self):
         return float(f"{self._BYN:.2f}")
 
     def get_to_trx(self):
+        if not self.fixed_trx is None:
+            return self.fixed_trx
         rate = Decimal(str(src.util.configs.trx_config.data['to_trx_rate']))
         return float((Decimal(self._BYN) * rate).quantize(Decimal('0.00'), rounding=ROUND_DOWN))
 
@@ -33,6 +37,10 @@ class Amount:
 
     def __repr__(self):
         return str(self.get_byn_amount())
+
+    def fix_trx(self, fixed):
+        self.fixed_trx = fixed
+        return self
 
 def amount_from_trx(trx: float) -> Amount:
     return Amount(trx / float(src.util.configs.trx_config.data['to_trx_rate']))
