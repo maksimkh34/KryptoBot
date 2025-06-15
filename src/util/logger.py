@@ -107,3 +107,6 @@ class Logger:
 
 def get_logger(name: str = "main") -> Logger:
     return Logger(name)
+
+
+logger = get_logger()

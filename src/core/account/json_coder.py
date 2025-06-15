@@ -2,7 +2,7 @@ import json
 
 from src.core.account.Account import Account
 from src.core.currency.Amount import Amount
-from src.util.logger.instance import logger
+from src.util.logger import logger
 
 
 class AccountEncoder(json.JSONEncoder):

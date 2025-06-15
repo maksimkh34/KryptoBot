@@ -2,7 +2,7 @@ import json
 import os
 from typing import Any
 
-from src.util.logger.instance import logger
+from src.util.logger import logger
 
 
 class JsonFileStorage:

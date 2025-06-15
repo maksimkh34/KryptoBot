@@ -1,4 +1,4 @@
-import src.util.instances
+import src.util.configs
 
 
 class Amount:
@@ -11,10 +11,10 @@ class Amount:
         return self._BYN
 
     def get_to_trx(self):
-        return self._BYN * float(src.util.instances.trx_config.data['to_trx_rate'])
+        return self._BYN * float(src.util.configs.trx_config.data['to_trx_rate'])
 
     def get_from_trx(self):
-        return self._BYN * float(src.util.instances.trx_config.data['from_trx_rate'])
+        return self._BYN * float(src.util.configs.trx_config.data['from_trx_rate'])
 
     def to_dict(self):
         return {

@@ -1,6 +1,6 @@
 from typing import List
 
-import src.util.logger.instance
+import src.util.logger
 from src.core.account import Account
 from src.config.files import get_accounts_filename
 from src.core.account.json_coder import AccountEncoder, AccountDecoder
@@ -11,8 +11,9 @@ from src.database.JsonFileStorage import JsonFileStorage
 from src.config.env.env import get_env_var
 from src.config.env.var_names import ADMIN_ID
 
-logger = src.util.logger.instance.logger
+logger = src.util.logger.logger
 
+MAX_DEPT = 5
 
 class AccountManager:
     def __init__(self, storage: JsonFileStorage = None):
@@ -30,7 +31,7 @@ class AccountManager:
             if account.get_id() == tg_id:
                 return account
         logger.log(f"Account with tg_id={tg_id} not found")
-        raise AccountNotFound("id: " + str(tg_id))
+        return None
 
     def block(self, tg_id):
         account = self.find_account(tg_id)
@@ -87,7 +88,7 @@ class AccountManager:
                 logger.error(f"Transaction sender [id {from_tg_id}] is blocked. ")
                 raise AccountIsBlocked(f"Transaction sender [id {from_tg_id}] is blocked. ")
 
-            if from_account.get_balance() < amount.get_byn_amount():
+            if from_account.get_balance() - amount.get_byn_amount() < MAX_DEPT * -1:
                 logger.error(f"Account {from_tg_id} tried to transfer {amount} while balance "
                              f"is {from_account.get_balance()}")
                 return False
@@ -103,3 +104,6 @@ class AccountManager:
         self.storage.data = self.accounts
         logger.info(f"Transferred {amount} from {from_tg_id} to {to_tg_id}")
         return True
+
+
+account_manager = AccountManager()

@@ -2,6 +2,7 @@ from telegram.ext import Application
 from src.bot.handlers import *
 import src.config.env.env
 import src.config.env.var_names
+from src.util.logger import logger
 
 
 def start_bot():
