@@ -161,7 +161,7 @@ async def confirm_transaction(update: Update, context: CallbackContext) -> int:
             f"🔔 *Новый платеж 🔔*\n\n"
             f"Отправитель: `{tg_id}`\n"
             f"Получатель: `{address}`\n"
-            f"Сумма: *{context.user_data["total_byn"]} BYN*\n"
+            f"Сумма: *{context.user_data['total_byn']} BYN*\n"
             f"Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} \n\n"
         )
         sent_message = await context.bot.send_message(

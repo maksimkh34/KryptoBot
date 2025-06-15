@@ -20,6 +20,8 @@ def start_bot():
 
     app.add_handler(ch_start)
     app.add_handler(ch_get_account_balance)
+    app.add_handler(ch_max_amount)
+    app.add_handler(ch_wallets_info)
 
     app.add_handler(get_transfer_conversation())
     app.add_handler(get_payment_conversation())
