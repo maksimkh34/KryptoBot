@@ -15,6 +15,7 @@ def start_bot():
 
     app = Application.builder().token(token).build()
     app.add_handler(ch_start)
+    app.add_handler(ch_get_account_balance)
 
     logger.debug("polling...")
     app.run_polling()

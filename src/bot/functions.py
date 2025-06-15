@@ -8,5 +8,7 @@ async def start(update, context):
 
 async def get_account_balance(update, context):
     account_id = update.effective_user.id
-    account_manager.get_byn_balance(int(account_id))
+    balance = account_manager.get_byn_balance(int(account_id))
+    if balance == -1:
+        await context.bot.send_message("")
     await context.bot.send_message()

@@ -49,6 +49,8 @@ class AccountManager:
         return self.find_account(tg_id).is_blocked()
 
     def get_byn_balance(self, tg_id):
+        if tg_id == get_env_var(ADMIN_ID):
+            return -1
         return self.find_account(tg_id).get_balance()
 
     def add_account(self, tg_id: int, init_balance: int = 0, is_blocked: bool = False) -> Account:
