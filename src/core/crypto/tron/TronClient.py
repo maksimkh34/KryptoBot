@@ -70,7 +70,7 @@ class TronClient(Client):
     def transfer(self, private_key: str, to_address: str, amount: Amount) -> str:
         try:
             prv_key = PrivateKey(bytes.fromhex(private_key))
-            amount_sun = int(amount.get_to_trx() * 1_000_000)  # Конвертация в SUN
+            amount_sun = int((amount.get_to_trx() if amount.fixed_trx is None else amount.fixed_trx) * 1_000_000)  # Конвертация в SUN
 
             txn = (
                 self._client.trx.transfer(
