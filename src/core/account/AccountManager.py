@@ -8,6 +8,8 @@ from src.core.currency.Amount import Amount
 from src.core.exceptions.AccountIsBlocked import AccountIsBlocked
 from src.core.exceptions.AccountNotFound import AccountNotFound
 from src.database.JsonFileStorage import JsonFileStorage
+from src.config.env.env import get_env_var
+from src.config.env.var_names import ADMIN_ID
 
 logger = src.util.logger.instance.logger
 
@@ -28,7 +30,7 @@ class AccountManager:
             if account.get_id() == tg_id:
                 return account
         logger.log(f"Account with tg_id={tg_id} not found")
-        return None
+        raise AccountNotFound("id: " + str(tg_id))
 
     def block(self, tg_id):
         account = self.find_account(tg_id)
@@ -62,39 +64,42 @@ class AccountManager:
     def transfer(self, from_tg_id: int, to_tg_id: int, amount: Amount) -> bool:
         logger.debug(f"Creating transaction for {amount.get_byn_amount()} from {from_tg_id} to {to_tg_id}")
 
-        from_account = self.find_account(from_tg_id)
-        to_account = self.find_account(to_tg_id)
 
-        if type(from_account) is not Account.Account:
-            logger.error(f"Transaction sender [id {from_tg_id}] not found. ")
-            raise AccountNotFound(f"Account [id {from_tg_id}] not found. ")
+        to_account = self.find_account(to_tg_id)
 
         if type(to_account) is not Account.Account:
             logger.error(f"Transaction receiver [id {to_tg_id}] not found. ")
             raise AccountNotFound(f"Account [id {to_tg_id}] not found. ")
-
-
-        if from_account.is_blocked():
-            logger.error(f"Transaction sender [id {from_tg_id}] is blocked. ")
-            raise AccountIsBlocked(f"Transaction sender [id {from_tg_id}] is blocked. ")
 
         if to_account.is_blocked():
             logger.error(f"Transaction sender [id {to_tg_id}] is blocked. ")
             raise AccountIsBlocked(f"Transaction sender [id {to_tg_id}] is blocked. ")
 
 
-        if from_account.get_balance() < amount.get_byn_amount():
-            logger.error(f"Account {from_tg_id} tried to transfer {amount} while balance "
-                         f"is {from_account.get_balance()}")
-            return False
+        if not from_tg_id == int(get_env_var(ADMIN_ID)):
+            from_account = self.find_account(from_tg_id)
 
-        if amount.get_byn_amount() <= 0:
-            logger.error(f"Invalid amount: {amount.get_byn_amount()}")
-            raise ValueError(f"Invalid amount: {amount.get_byn_amount()}")
+            if type(from_account) is not Account.Account:
+                logger.error(f"Transaction sender [id {from_tg_id}] not found. ")
+                raise AccountNotFound(f"Account [id {from_tg_id}] not found. ")
 
-        from_account.modify_balance(-1 * amount.get_byn_amount())
+            if from_account.is_blocked():
+                logger.error(f"Transaction sender [id {from_tg_id}] is blocked. ")
+                raise AccountIsBlocked(f"Transaction sender [id {from_tg_id}] is blocked. ")
+
+            if from_account.get_balance() < amount.get_byn_amount():
+                logger.error(f"Account {from_tg_id} tried to transfer {amount} while balance "
+                             f"is {from_account.get_balance()}")
+                return False
+
+            if amount.get_byn_amount() <= 0:
+                logger.error(f"Invalid amount: {amount.get_byn_amount()}")
+                raise ValueError(f"Invalid amount: {amount.get_byn_amount()}")
+
+
+            from_account.modify_balance(-1 * amount.get_byn_amount())
+
         to_account.modify_balance(amount.get_byn_amount())
         self.storage.data = self.accounts
         logger.info(f"Transferred {amount} from {from_tg_id} to {to_tg_id}")
-        logger.debug(f"Баланс {from_tg_id}: {from_account.get_balance()}, {to_tg_id}: {to_account.get_balance()}")
         return True

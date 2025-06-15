@@ -1,11 +1,11 @@
 from telegram.ext import Application
-from src.util.logger.instance import logger
 from src.bot.handlers import *
-import src.config.env
+import src.config.env.env
+import src.config.env.var_names
 
 
 def start_bot():
-    token = src.config.env.get_env_var("BOT_TOKEN")
+    token = src.config.env.env.get_env_var(src.config.env.var_names.BOT_TOKEN)
     if not token:
         logger.critical("BOT_TOKEN not found in .env")
         raise Exception(f"BOT_TOKEN is invalid: [{token}]")

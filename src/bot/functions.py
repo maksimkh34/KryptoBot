@@ -1,4 +1,4 @@
-from src.util.instances.logger import logger
+from src.util.logger.instance import logger
 
 
 async def start(update, context):

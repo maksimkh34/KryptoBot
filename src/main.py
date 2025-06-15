@@ -1,5 +1,5 @@
 from src.bot.bot_main import start_bot
-from src.util.instances.logger import logger
+from src.util.logger.instance import logger
 
 
 def main():

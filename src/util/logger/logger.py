@@ -2,8 +2,10 @@ from datetime import datetime
 from pathlib import Path
 from inspect import currentframe, getframeinfo
 from colorama import init, Fore, Style
+
+import src.config.env.var_names
 from src.config.directories import get_root
-from src.config.env import get_env_var
+from src.config.env.env import get_env_var
 
 init()
 
@@ -47,7 +49,7 @@ def _format_file_message(level: str, message: str, frame_info) -> str:
 class Logger:
     def __init__(self, name: str):
         self.name = name
-        self.log_level = get_env_var("LOGLVL", default="cf").lower()
+        self.log_level = get_env_var(src.config.env.var_names.LOG_LVL, default="cf").lower()
         self.log_path = None
         self._setup_file_handler()
 
