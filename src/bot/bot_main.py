@@ -1,6 +1,7 @@
 from telegram.ext import Application
 
-from src.bot.dialogs.transfers import get_transfer_conversation
+from src.bot.dialogs.payment import get_payment_conversation
+from src.bot.dialogs.transfer import get_transfer_conversation
 from src.bot.handlers import *
 import src.config.env.env
 import src.config.env.var_names
@@ -21,6 +22,7 @@ def start_bot():
     app.add_handler(ch_get_account_balance)
 
     app.add_handler(get_transfer_conversation())
+    app.add_handler(get_payment_conversation())
 
 
     logger.debug("polling...")

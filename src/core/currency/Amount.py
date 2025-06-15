@@ -1,3 +1,5 @@
+from decimal import Decimal, ROUND_UP, ROUND_DOWN
+
 import src.util.configs
 
 
@@ -11,7 +13,8 @@ class Amount:
         return self._BYN
 
     def get_to_trx(self):
-        return self._BYN * float(src.util.configs.trx_config.data['to_trx_rate'])
+        rate = Decimal(str(src.util.configs.trx_config.data['to_trx_rate']))
+        return float((Decimal(self._BYN) * rate).quantize(Decimal('0.00'), rounding=ROUND_DOWN))
 
     def get_from_trx(self):
         return self._BYN * float(src.util.configs.trx_config.data['from_trx_rate'])
@@ -30,3 +33,6 @@ class Amount:
 
     def __repr__(self):
         return str(self.get_byn_amount())
+
+def amount_from_trx(trx: float) -> Amount:
+    return Amount(trx / float(src.util.configs.trx_config.data['to_trx_rate']))
