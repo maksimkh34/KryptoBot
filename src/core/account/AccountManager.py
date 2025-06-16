@@ -8,13 +8,10 @@ from src.core.currency.Amount import Amount
 from src.core.exceptions.AccountIsBlocked import AccountIsBlocked
 from src.core.exceptions.AccountNotFound import AccountNotFound
 from src.database.JsonFileStorage import JsonFileStorage
-from src.config.env.env import get_env_var
-from src.config.env.var_names import ADMIN_ID
 from src.core.is_admin import is_admin
+from src.util.configs import trx_config
 
 logger = src.util.logger.logger
-
-MAX_DEPT = -5
 
 class AccountManager:
     def __init__(self, storage: JsonFileStorage = None):
@@ -90,7 +87,7 @@ class AccountManager:
                 logger.error(f"Transaction sender [id {from_tg_id}] is blocked. ")
                 raise AccountIsBlocked(f"Transaction sender [id {from_tg_id}] is blocked. ")
 
-            if from_account.get_balance() - amount.get_byn_amount() < MAX_DEPT:
+            if from_account.get_balance() - amount.get_byn_amount() < trx_config.data['max_debt']:
                 logger.error(f"Account {from_tg_id} tried to transfer {amount} while balance "
                              f"is {from_account.get_balance()}")
                 return False
@@ -115,7 +112,7 @@ class AccountManager:
         return Amount(reminder)
 
     def can_pay(self, tg_id: int, amount: Amount):
-        return self.get_reminder(tg_id, amount).get_byn_amount() >= MAX_DEPT
+        return self.get_reminder(tg_id, amount).get_byn_amount() >= trx_config.data["max_dept"]
 
     def subtract_from_balance(self, tg_id, amount: Amount):
         account = self.find_account(tg_id)

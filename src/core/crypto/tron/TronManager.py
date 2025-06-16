@@ -1,3 +1,4 @@
+from decimal import Decimal
 from enum import Enum
 from typing import List
 
@@ -6,6 +7,7 @@ from src.core.crypto.tron.TronWallet import TronWallet
 from src.core.currency.Amount import Amount
 from src.database.JsonFileStorage import JsonFileStorage
 import src
+from src.util.logger import logger
 
 
 class PayResult(Enum):
@@ -36,7 +38,7 @@ class TronManager:
 
         for wallet in wallets:
             if self.client.get_balance(wallet.get_address()) > amount.get_to_trx():
-                wallets_new[wallet] = self.client.get_balance(wallet.get_address()) - amount.get_to_trx()
+                wallets_new[wallet] = self.client.get_balance(wallet.get_address()) - float(amount.get_to_trx())
                 if wallets_new[wallet] < min_reminder:
                     min_reminder = wallets_new[wallet]
 
@@ -47,26 +49,44 @@ class TronManager:
         return None
 
     def pay(self, address: str, amount: Amount) -> PayResult:
-        _wallets = []
+        trx_amount = amount.get_to_trx()
 
-        for wallet in self.storage.data:
-            if self.client.get_balance(wallet.get_address()) > amount.get_to_trx():
-                _wallets.append(wallet)
+        sufficient_wallets = [
+            wallet for wallet in self.wallets
+            if self.client.get_balance(wallet.get_address()) >= trx_amount
+        ]
 
-        no_fees_wallets = self.get_no_fees_wallets(_wallets)
-        fee = False
-
-        if len(no_fees_wallets) == 0:
-            wallet = self.get_wallet_with_lower_reminder(_wallets, amount)
-            fee = True
-        else:
-            wallet = self.get_wallet_with_lower_reminder(no_fees_wallets, amount)
-
-        if wallet is None:
+        if not sufficient_wallets:
             return PayResult.NOT_ENOUGH_BALANCE
 
-        self.client.transfer(wallet.get_private_key(), address, amount)
-        return PayResult.COMPLETED_FEE if fee else PayResult.COMPLETED
+        no_fees_wallets = self.get_no_fees_wallets(sufficient_wallets)
+        fee_wallets = [w for w in sufficient_wallets if w not in no_fees_wallets]
+
+        chosen_wallet = None
+        fee = False
+
+        if no_fees_wallets:
+            chosen_wallet = min(
+                no_fees_wallets,
+                key=lambda w: self.client.get_balance(w.get_address()) - float(trx_amount)
+            )
+            fee = False
+        elif fee_wallets:
+            chosen_wallet = min(
+                fee_wallets,
+                key=lambda w: self.client.get_balance(w.get_address()) - float(trx_amount)
+            )
+            fee = True
+
+        if chosen_wallet is None:
+            return PayResult.ERROR
+
+        try:
+            self.client.transfer(chosen_wallet.get_private_key(), address, amount)
+            return PayResult.COMPLETED_FEE if fee else PayResult.COMPLETED
+        except Exception as e:
+            logger.error("Error transferring: " + str(e.args))
+            return PayResult.ERROR
 
     def get_no_fees_wallets(self, wallets):
         no_fees_wallets = []

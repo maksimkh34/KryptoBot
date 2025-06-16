@@ -9,7 +9,7 @@ from telegram.ext import (
 
 from src.bot.middleware import require_account
 from src.config.env.env import get_env_var
-from src.core.account.AccountManager import AccountManager, account_manager
+from src.core.account.AccountManager import account_manager
 from src.core.currency.Amount import Amount
 from src.core.exceptions.AccountIsBlocked import AccountIsBlocked
 from src.core.exceptions.AccountNotFound import AccountNotFound
@@ -143,7 +143,7 @@ async def receive_amount(update: Update, context: CallbackContext) -> int:
             )
             logger.error(f"Transfer failed for {tg_id}: insufficient funds")
         return ConversationHandler.END
-    except AccountIsBlocked as e:
+    except AccountIsBlocked:
         await update.message.reply_text(
             "❌ *Ошибка: аккаунт заблокирован*",
             parse_mode="Markdown",

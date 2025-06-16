@@ -10,11 +10,10 @@ from telegram.ext import (
 import src.config.env.var_names
 from src.bot.middleware import require_account
 from src.config.env.env import get_env_var
-from src.core.account.AccountManager import AccountManager, account_manager
+from src.core.account.AccountManager import account_manager
 from src.core.crypto.tron.TronClient import get_fee
 from src.core.crypto.tron.TronManager import tron_manager, PayResult
 from src.core.currency.Amount import Amount, amount_from_trx
-from src.core.exceptions.AccountNotFound import AccountNotFound
 from src.util.logger import logger
 from datetime import datetime
 
@@ -146,14 +145,15 @@ async def confirm_transaction(update: Update, context: CallbackContext) -> int:
     elif confirmation == "ok":
         address = context.user_data["address"]
         amount = context.user_data["amount_trx"]
+        payment_amount = amount_from_trx(amount)
 
-        if tron_manager.pay(address, amount_from_trx(amount).fix_trx(float(amount))) == PayResult.NOT_ENOUGH_BALANCE:
+        if tron_manager.pay(address, payment_amount) == PayResult.NOT_ENOUGH_BALANCE:
             await update.message.reply_text(
                 "❌ *Перевод отменен*. Недостаточно средств на кошельках.\n",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardRemove(),
             )
-            sent_message = await context.bot.send_message(
+            await context.bot.send_message(
                 chat_id=get_env_var(src.config.env.var_names.ADMIN_ID),
                 text=f"Недостаточно средств: {amount}\n\n/wallets_info"
             )

@@ -1,46 +1,39 @@
-from decimal import Decimal, ROUND_UP, ROUND_DOWN
+from decimal import Decimal, ROUND_HALF_UP
 
 import src.util.configs
 
-
 class Amount:
-    _BYN = 0
-    fixed_trx = 0
+    def __init__(self, byn: Decimal | str | float = Decimal('0.0'), trx: Decimal | str | float = Decimal('0.0')):
+        if byn and trx:
+            raise ValueError("Нельзя одновременно указывать BYN и TRX")
 
-    def __init__(self, amount_byn: float = 0, fixed_trx=None):
-        self._BYN = amount_byn
-        self.fixed_trx = 0 if fixed_trx is None else fixed_trx
+        if trx:
+            rate = Decimal(str(src.util.configs.trx_config.data['to_trx_rate']))
+            self._byn = (Decimal(str(trx)) / rate)
+        else:
+            self._byn = Decimal(str(byn))
 
-    def get_byn_amount(self):
-        return float(f"{self._BYN:.2f}")
+    def get_byn_amount(self) -> Decimal:
+        return self._byn.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-    def get_to_trx(self):
-        if not self.fixed_trx is None:
-            return self.fixed_trx
+    def get_to_trx(self) -> Decimal:
         rate = Decimal(str(src.util.configs.trx_config.data['to_trx_rate']))
-        return float((Decimal(self._BYN) * rate).quantize(Decimal('0.00'), rounding=ROUND_DOWN))
+        return self._byn * rate
 
-    def get_from_trx(self):
-        return self._BYN * float(src.util.configs.trx_config.data['from_trx_rate'])
+    def __repr__(self):
+        return f"{self.get_byn_amount()} BYN"
 
     def to_dict(self):
         return {
             "__type__": "Amount",
-            "byn": self._BYN
+            "byn": str(self._byn) # Сохраняем как строку для точности
         }
 
     @classmethod
     def from_dict(cls, data: dict):
         if data.get("__type__") != "Amount":
             raise ValueError(f"Invalid type for Amount deserialization: {data.get('__type__')}")
-        return cls(amount_byn=data["byn"])
+        return cls(byn=data["byn"])
 
-    def __repr__(self):
-        return str(self.get_byn_amount())
-
-    def fix_trx(self, fixed):
-        self.fixed_trx = fixed
-        return self
-
-def amount_from_trx(trx: float) -> Amount:
-    return Amount(trx / float(src.util.configs.trx_config.data['to_trx_rate']))
+def amount_from_trx(trx_value: float | str) -> Amount:
+    return Amount(trx=str(trx_value))

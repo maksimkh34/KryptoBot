@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from src.core.currency.Amount import Amount
 
 
@@ -43,7 +45,7 @@ class Account:
         }
 
     def modify_balance(self, amount: float):
-        self._balance = Amount(self._balance.get_byn_amount() + amount)
+        self._balance = Amount(self._balance.get_byn_amount() + Decimal(amount))
 
     @classmethod
     def from_dict(cls, data: dict):

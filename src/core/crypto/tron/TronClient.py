@@ -9,17 +9,12 @@ from src.config.env.env import get_env_var
 from src.config.env.var_names import TRON_NETWORK, TRONGRID_API_KEY
 from src.core.crypto.Client import Client
 from src.core.currency.Amount import Amount
-from src.database.JsonFileStorage import JsonFileStorage
-import src.config.files
-import src.core.crypto.tron.json_coder
+from src.util.configs import trx_config
 from src.util.logger import logger
-
-REQUIRED_BANDWIDTH_TO_TRANSFER = 280
-FEE = Amount(0.2714)
 
 
 def get_fee():
-    return FEE
+    return trx_config.data['transaction_fee_byn']
 
 
 class TronClient(Client):
@@ -70,7 +65,8 @@ class TronClient(Client):
     def transfer(self, private_key: str, to_address: str, amount: Amount) -> str:
         try:
             prv_key = PrivateKey(bytes.fromhex(private_key))
-            amount_sun = int((amount.get_to_trx() if amount.fixed_trx is None else amount.fixed_trx) * 1_000_000)  # Конвертация в SUN
+            trx_value = amount.get_to_trx()
+            amount_sun = int(trx_value * 1_000_000)
 
             txn = (
                 self._client.trx.transfer(
@@ -106,4 +102,4 @@ class TronClient(Client):
             return 0
 
     def can_transfer_without_fees(self, address):
-        return self.estimate_bandwidth_usage(address) >= REQUIRED_BANDWIDTH_TO_TRANSFER
+        return self.estimate_bandwidth_usage(address) >= trx_config.data['required_bandwidth']
