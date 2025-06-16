@@ -14,7 +14,7 @@ class Account:
 
     def __init__(self, tg_id: int,
                  is_blocked: bool = False,
-                 init_balance: int = 0):
+                 init_balance: Decimal = 0):
         self._tg_id = tg_id
         self._blocked = is_blocked
         self._balance = Amount(init_balance)
@@ -44,7 +44,7 @@ class Account:
             _STR_BALANCE: self._balance.to_dict()
         }
 
-    def modify_balance(self, amount: float):
+    def modify_balance(self, amount: Decimal | float):
         self._balance = Amount(self._balance.get_byn_amount() + Decimal(amount))
 
     @classmethod

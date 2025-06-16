@@ -9,12 +9,15 @@ from src.config.env.env import get_env_var
 from src.config.env.var_names import TRON_NETWORK, TRONGRID_API_KEY
 from src.core.crypto.Client import Client
 from src.core.currency.Amount import Amount
-from src.util.configs import trx_config
+import src.util.configs
 from src.util.logger import logger
 
+def get_fee() -> Amount:
+    fee_byn = src.util.configs.trx_config.data.get('transaction_fee_byn', 0.35)
+    return Amount(byn=str(fee_byn))
 
-def get_fee():
-    return trx_config.data['transaction_fee_byn']
+def get_required_bandwidth() -> int:
+    return src.util.configs.trx_config.data.get('required_bandwidth', 280)
 
 
 class TronClient(Client):
@@ -54,13 +57,13 @@ class TronClient(Client):
             logger.error(f"Address validation failed for {address}: {str(e)}")
             return False
 
-    def get_balance(self, address: str) -> float:
+    def get_balance(self, address: str) -> Decimal:
         try:
             balance = self._client.get_account_balance(address)
-            return float(Decimal(balance))
+            return Decimal(balance)
         except Exception as e:
             logger.error(f"Failed to get balance for {address}: {str(e)}")
-            return 0.0
+            return Decimal('0.0')
 
     def transfer(self, private_key: str, to_address: str, amount: Amount) -> str:
         try:
@@ -79,15 +82,16 @@ class TronClient(Client):
             )
 
             txid = txn.txid
+            logger.debug(f"Broadcasting transaction: TXID={txid}, From={prv_key.public_key.to_base58check_address()}, To={to_address}, Amount={trx_value:.6f} TRX")
             txn.broadcast()
-            logger.info(f"Transaction sent: TXID={txid}, to={to_address}, amount={amount} TRX")
+            logger.info(f"Transaction sent successfully: TXID={txid}")
             return txid
 
         except ValueError as e:
-            logger.error(f"Invalid transaction parameters: {str(e)}")
+            logger.error(f"Invalid transaction parameters for transfer to {to_address} of amount {amount}: {str(e)}")
             raise
         except Exception as e:
-            logger.error(f"Transaction failed: {str(e)}")
+            logger.error(f"Transaction failed for to_address={to_address}, amount={amount.get_to_trx()} TRX. Error: {str(e)}")
             raise RuntimeError(f"Transaction failed: {str(e)}")
 
     def estimate_bandwidth_usage(self, address: str) -> int:
@@ -101,5 +105,5 @@ class TronClient(Client):
             logger.error(f"Bandwidth check failed for {address}: {str(e)}")
             return 0
 
-    def can_transfer_without_fees(self, address):
-        return self.estimate_bandwidth_usage(address) >= trx_config.data['required_bandwidth']
+    def can_transfer_without_fees(self, address: str) -> bool:
+        return self.estimate_bandwidth_usage(address) >= get_required_bandwidth()

@@ -1,13 +1,13 @@
-from decimal import Decimal
 from enum import Enum
-from typing import List
-
-from src.core.crypto.tron.TronClient import TronClient
+from typing import List, Optional
+from src.core.crypto.tron.TronClient import TronClient, get_fee
 from src.core.crypto.tron.TronWallet import TronWallet
 from src.core.currency.Amount import Amount
 from src.database.JsonFileStorage import JsonFileStorage
-import src
 from src.util.logger import logger
+import src.core.crypto.tron.json_coder
+
+import src
 
 
 class PayResult(Enum):
@@ -22,73 +22,66 @@ class TronManager:
                                        default_value=[],
                                        decode_hook=src.core.crypto.tron.json_coder.TronWalletDecoder.decode_hook,
                                        encoder=src.core.crypto.tron.json_coder.TronWalletEncoder)
-        self.wallets = self.storage.data
+        self.wallets: List[TronWallet] = self.storage.data
         self.client = TronClient()
 
-    def get_wallet_with_lower_reminder(self, wallets: List[TronWallet], amount: Amount):
-        if len(wallets) == 0:
-            return None
-
-        if len(wallets) == 1:
-            return wallets[0]
-
-
-        wallets_new = {}
-        min_reminder = 9999999999999999999
+    def get_wallet_with_lower_reminder(self, wallets: List[TronWallet], amount: Amount) -> Optional[TronWallet]:
+        trx_amount = amount.get_to_trx()
+        best_wallet = None
+        min_reminder = float('inf')
 
         for wallet in wallets:
-            if self.client.get_balance(wallet.get_address()) > amount.get_to_trx():
-                wallets_new[wallet] = self.client.get_balance(wallet.get_address()) - float(amount.get_to_trx())
-                if wallets_new[wallet] < min_reminder:
-                    min_reminder = wallets_new[wallet]
+            balance = self.client.get_balance(wallet.get_address())
+            reminder = balance - trx_amount
+            if reminder < min_reminder:
+                min_reminder = reminder
+                best_wallet = wallet
 
-        for (wallet, reminder) in wallets_new.items():
-            if reminder == min_reminder:
-                return wallet
-
-        return None
+        return best_wallet
 
     def pay(self, address: str, amount: Amount) -> PayResult:
         trx_amount = amount.get_to_trx()
+        logger.info(f"Initiating payment of {trx_amount:.6f} TRX to {address}")
 
+        try:
+            chosen_wallet, fee_charged = self.choose_wallet(amount)
+        except ValueError:
+            return PayResult.NOT_ENOUGH_BALANCE
+
+        if chosen_wallet is None:
+            logger.error("A wallet should have been selected, but was not. This indicates a logic error.")
+            return PayResult.ERROR
+
+        logger.debug(f"Chosen wallet {chosen_wallet.get_address()} for the transaction.")
+
+        try:
+            self.client.transfer(chosen_wallet.get_private_key(), address, amount)
+            return PayResult.COMPLETED_FEE if fee_charged == Amount() else PayResult.COMPLETED
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during transfer: {e}")
+            return PayResult.ERROR
+
+    def choose_wallet(self, amount: Amount) -> (TronWallet, Amount):
+        trx_amount = amount.get_to_trx()
         sufficient_wallets = [
             wallet for wallet in self.wallets
             if self.client.get_balance(wallet.get_address()) >= trx_amount
         ]
 
         if not sufficient_wallets:
-            return PayResult.NOT_ENOUGH_BALANCE
+            logger.warning(f"Payment failed: Not enough balance on any wallet to send {trx_amount:.6f} TRX.")
+            raise ValueError("Not enough balance!")
 
         no_fees_wallets = self.get_no_fees_wallets(sufficient_wallets)
-        fee_wallets = [w for w in sufficient_wallets if w not in no_fees_wallets]
-
-        chosen_wallet = None
-        fee = False
 
         if no_fees_wallets:
-            chosen_wallet = min(
-                no_fees_wallets,
-                key=lambda w: self.client.get_balance(w.get_address()) - float(trx_amount)
-            )
-            fee = False
-        elif fee_wallets:
-            chosen_wallet = min(
-                fee_wallets,
-                key=lambda w: self.client.get_balance(w.get_address()) - float(trx_amount)
-            )
-            fee = True
+            return self.get_wallet_with_lower_reminder(no_fees_wallets, amount), Amount()
+        else:
+            logger.warning(
+                "No wallets with enough bandwidth. A fee will be charged. Selecting from all sufficient wallets.")
+            return self.get_wallet_with_lower_reminder(sufficient_wallets, amount), get_fee()
 
-        if chosen_wallet is None:
-            return PayResult.ERROR
-
-        try:
-            self.client.transfer(chosen_wallet.get_private_key(), address, amount)
-            return PayResult.COMPLETED_FEE if fee else PayResult.COMPLETED
-        except Exception as e:
-            logger.error("Error transferring: " + str(e.args))
-            return PayResult.ERROR
-
-    def get_no_fees_wallets(self, wallets):
+    def get_no_fees_wallets(self, wallets: List[TronWallet]) -> List[TronWallet]:
         no_fees_wallets = []
         for wallet in wallets:
             if self.client.can_transfer_without_fees(wallet.get_address()):
@@ -105,5 +98,6 @@ class TronManager:
             if balance > max_balance:
                 max_balance = balance
         return max_balance
+
 
 tron_manager = TronManager()
