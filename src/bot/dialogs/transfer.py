@@ -9,7 +9,7 @@ from telegram.ext import (
 
 from src.bot.middleware import require_account
 from src.config.env.env import get_env_var
-from src.core.account.AccountManager import AccountManager, account_manager
+from src.core.account.AccountManager import account_manager
 from src.core.currency.Amount import Amount
 from src.core.exceptions.AccountIsBlocked import AccountIsBlocked
 from src.core.exceptions.AccountNotFound import AccountNotFound
@@ -71,14 +71,14 @@ async def receive_recipient(update: Update, context: CallbackContext) -> int:
         await update.message.reply_text("Пользователь не найден.",
             parse_mode="Markdown",
         )
-        return RECIPIENT
+        return ConversationHandler.END
     except ValueError as e:
         logger.warning(f"Invalid recipient input {recipient_input} by {tg_id}: {e}")
         await update.message.reply_text(
             "❌ Ошибка",
             parse_mode="Markdown"
         )
-        return RECIPIENT
+        return ConversationHandler.END
 
 async def receive_amount(update: Update, context: CallbackContext) -> int:
     user = update.effective_user
@@ -104,7 +104,7 @@ async def receive_amount(update: Update, context: CallbackContext) -> int:
 
         if account_manager.transfer(tg_id, recipient_id, amount):
             new_balance = account_manager.get_byn_balance(tg_id)
-            trx_amount = amount.get_to_trx()
+            trx_amount = amount.format_trx()
             message = (
                 f"✅ *Перевод выполнен* 🎉\n\n"
                 f"Сумма: *{amount.get_byn_amount()} BYN* ({trx_amount:.2f} TRX)\n"
@@ -131,7 +131,7 @@ async def receive_amount(update: Update, context: CallbackContext) -> int:
             )
             await context.bot.send_message(
                 chat_id=recipient_id,
-                text=f"🔔 Перевод от {tg_id}: *{amount.get_byn_amount()} BYN* ({amount.get_to_trx():.2f} TRX)",
+                text=f"🔔 Перевод от {tg_id}: *{amount.get_byn_amount()} BYN* ({amount.format_trx():.2f} TRX)",
                 parse_mode="Markdown"
             )
             logger.info(f"Transfer {amount.get_byn_amount()} BYN from {tg_id} to {recipient_id} succeeded")
@@ -143,7 +143,7 @@ async def receive_amount(update: Update, context: CallbackContext) -> int:
             )
             logger.error(f"Transfer failed for {tg_id}: insufficient funds")
         return ConversationHandler.END
-    except AccountIsBlocked as e:
+    except AccountIsBlocked:
         await update.message.reply_text(
             "❌ *Ошибка: аккаунт заблокирован*",
             parse_mode="Markdown",

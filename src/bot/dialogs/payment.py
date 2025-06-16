@@ -6,15 +6,14 @@ from telegram.ext import (
     CallbackContext,
     filters,
 )
+from decimal import Decimal, InvalidOperation
 
-import src.config.env.var_names
 from src.bot.middleware import require_account
 from src.config.env.env import get_env_var
-from src.core.account.AccountManager import AccountManager, account_manager
+from src.core.account.AccountManager import account_manager
 from src.core.crypto.tron.TronClient import get_fee
 from src.core.crypto.tron.TronManager import tron_manager, PayResult
 from src.core.currency.Amount import Amount, amount_from_trx
-from src.core.exceptions.AccountNotFound import AccountNotFound
 from src.util.logger import logger
 from datetime import datetime
 
@@ -41,35 +40,28 @@ async def start_payment(update: Update, context: CallbackContext):
     )
     return ADDRESS
 
+
 async def receive_address(update: Update, context: CallbackContext):
     tg_id = update.effective_user.id
     address = update.message.text
 
     if address.lower() == "отмена":
-        logger.info(f"User {tg_id} cancelled transfer")
-        await update.message.reply_text(
-            "❌ Перевод отменен. ",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        logger.debug(f"User {tg_id} cancelled payment dialog at address step.")
+        await update.message.reply_text("❌ Перевод отменен.", reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     if not tron_manager.client.validate_address(address):
-        await update.message.reply_text(
-            "🚫 *Неверный адрес* \n",
-            parse_mode="Markdown",
-        )
+        await update.message.reply_text("🚫 *Неверный адрес*, попробуйте еще раз.", parse_mode="Markdown")
         return ADDRESS
 
     context.user_data["address"] = address
-
     await update.message.reply_text(
-        "💸 *Сумма транзакции (TRX)*:\n",
+        "💸 *Сумма транзакции (TRX)*:\nВведите сумму в TRX для перевода.",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardMarkup([["Отмена"]], resize_keyboard=True),
     )
-
     return AMOUNT
+
 
 async def receive_amount(update: Update, context: CallbackContext):
     user = update.effective_user
@@ -77,34 +69,51 @@ async def receive_amount(update: Update, context: CallbackContext):
     amount_input = update.message.text.strip()
 
     if amount_input.lower() == "отмена":
-        logger.info(f"User {tg_id} cancelled transfer")
-        await update.message.reply_text(
-            "❌ *Перевод отменен*",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardRemove(),
-        )
+        logger.info(f"User {tg_id} cancelled payment dialog at amount step.")
+        await update.message.reply_text("❌ *Перевод отменен*", parse_mode="Markdown",
+                                        reply_markup=ReplyKeyboardRemove())
         return ConversationHandler.END
 
     try:
-        amount_trx = float(amount_input)
+        amount_trx = Decimal(amount_input)
         if amount_trx <= 0:
             raise ValueError("Сумма должна быть положительной")
 
         amount = amount_from_trx(amount_trx)
         address = context.user_data["address"]
-        context.user_data["amount_byn"] = amount.get_byn_amount()
-        context.user_data["amount_trx"] = amount_trx
-        fee = Amount(0)
-        if not tron_manager.can_transfer_without_fees():
-            fee = get_fee()
 
-        total_byn = f"{(amount.get_byn_amount() + fee.get_byn_amount()):.2f}"
-        context.user_data["total_byn"] = total_byn
-
-        if not account_manager.can_pay(tg_id, amount):
+        try:
+            _, fee_amount = tron_manager.choose_wallet(amount)
+        except ValueError:
+            msg = (
+                f"❌ *Перевод отменен*. Недостаточно средств.\n"
+                f"Нужно: {amount.format_trx()} TRX\n"
+                f"Баланс: {tron_manager.get_max_payment_amount()} TRX"
+            )
             await update.message.reply_text(
-                f"❌ *Перевод отменен*. Недостаточно средств (нужно: {total_byn}, "
-                f"баланс: {account_manager.get_byn_balance(tg_id)})",
+                msg,
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            admin_id = get_env_var("ADMIN_ID")
+            await context.bot.send_message(
+                chat_id=admin_id,
+                text=msg,
+                parse_mode="Markdown"
+            )
+            logger.error("Not enough balance: " + amount.format_trx())
+            return ConversationHandler.END
+
+        total_amount_to_pay = Amount(byn=(amount.get_byn_amount() + fee_amount.get_byn_amount()))
+
+        context.user_data["payment_amount"] = amount
+        context.user_data["total_amount_to_pay"] = total_amount_to_pay
+
+        if not account_manager.can_pay(tg_id, total_amount_to_pay):
+            await update.message.reply_text(
+                f"❌ *Перевод отменен*. Недостаточно средств.\n"
+                f"Нужно: {total_amount_to_pay.get_byn_amount():.2f} BYN\n"
+                f"Баланс: {account_manager.get_byn_balance(tg_id):.2f} BYN",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardRemove(),
             )
@@ -114,92 +123,97 @@ async def receive_amount(update: Update, context: CallbackContext):
             "✅ *Подтвердите перевод*:\n\n"
             f"Получатель: `{address}`\n"
             f"Сумма: *{amount.get_byn_amount():.2f} BYN*\n"
-            f"Комиссия: *{fee.get_byn_amount():.2f} BYN*\n\n"
-            f"К оплате: *{(amount.get_byn_amount() + fee.get_byn_amount()):.2f} BYN*\n"
+            f"Комиссия: *{fee_amount.get_byn_amount():.2f} BYN*\n\n"
+            f"Всего: *{total_amount_to_pay.get_byn_amount():.2f} BYN*\n"
             f"Будет переведено: *{amount_input} TRX*\n",
             parse_mode="Markdown",
             reply_markup=ReplyKeyboardMarkup([["Отмена"], ["OK"]], resize_keyboard=True),
         )
-
         return CONFIRMATION
 
-    except ValueError as e:
+    except (ValueError, InvalidOperation) as e:
+        logger.warning(f"User {tg_id} entered invalid amount: {amount_input}. Error: {e}")
         await update.message.reply_text(
-            "❌ *Перевод отменен*. Неверная сумма\n\n" + str(e.args),
+            "❌ *Неверная сумма*. Введите число, например: `12.5`",
             parse_mode="Markdown",
-            reply_markup=ReplyKeyboardRemove(),
         )
-        return ConversationHandler.END
+        return AMOUNT
 
 async def confirm_transaction(update: Update, context: CallbackContext) -> int:
     user = update.effective_user
     tg_id = user.id
     confirmation = update.message.text.strip().lower()
 
-    if confirmation == "отмена":
-        logger.info(f"User {tg_id} cancelled payment")
-        await update.message.reply_text(
-            "Перевод отменён.",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        return ConversationHandler.END
-    elif confirmation == "ok":
-        address = context.user_data["address"]
-        amount = context.user_data["amount_trx"]
-
-        if tron_manager.pay(address, amount_from_trx(amount).fix_trx(float(amount))) == PayResult.NOT_ENOUGH_BALANCE:
-            await update.message.reply_text(
-                "❌ *Перевод отменен*. Недостаточно средств на кошельках.\n",
-                parse_mode="Markdown",
-                reply_markup=ReplyKeyboardRemove(),
-            )
-            sent_message = await context.bot.send_message(
-                chat_id=get_env_var(src.config.env.var_names.ADMIN_ID),
-                text=f"Недостаточно средств: {amount}\n\n/wallets_info"
-            )
-            return ConversationHandler.END
-        logger.info(f"Transaction confirmed: {amount:.2f} TRX to {address}")
-
-        account_manager.subtract_from_balance(tg_id, Amount(float(context.user_data["total_byn"])))
-
-        await update.message.reply_text(
-            f"Перевод выполнен:\n"
-            f"Сумма: {amount:.2f} TRX\n"
-            f"Получатель: {address}\n"
-            f"Баланс: {account_manager.get_byn_balance(tg_id):.2f}",
-            reply_markup=ReplyKeyboardRemove(),
-        )
-        admin_id = get_env_var("ADMIN_ID")
-        admin_message = (
-            f"🔔 *Новый платеж 🔔*\n\n"
-            f"Отправитель: `{tg_id}`\n"
-            f"Получатель: `{address}`\n"
-            f"Сумма: *{context.user_data['total_byn']} BYN*\n"
-            f"Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} \n\n"
-        )
-        sent_message = await context.bot.send_message(
-            chat_id=admin_id,
-            text=admin_message,
-            parse_mode="Markdown"
-        )
-        await context.bot.pin_chat_message(chat_id=admin_id,
-                                           message_id=sent_message.message_id, disable_notification=True)
-        return ConversationHandler.END
-    else:
-        await update.message.reply_text(
-            "Пожалуйста, нажмите *Отмена* или *OK*.",
-            parse_mode="Markdown",
-        )
+    if confirmation not in ["ok", "отмена"]:
+        await update.message.reply_text("Пожалуйста, нажмите *Отмена* или *OK*.", parse_mode="Markdown")
         return CONFIRMATION
+
+    if confirmation == "отмена":
+        logger.info(f"User {tg_id} cancelled payment at confirmation step.")
+        await update.message.reply_text("Перевод отменён.", reply_markup=ReplyKeyboardRemove())
+        return ConversationHandler.END
+
+    address = context.user_data["address"]
+    payment_amount: Amount = context.user_data["payment_amount"]
+    total_amount_to_pay: Amount = context.user_data["total_amount_to_pay"]
+
+    if not account_manager.subtract_from_balance(tg_id, total_amount_to_pay):
+        await update.message.reply_text(
+            f"❌ *Перевод отменен*. Недостаточно средств.\n"
+            f"Ваш баланс: {account_manager.get_byn_balance(tg_id):.2f} BYN",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+
+    pay_result = tron_manager.pay(address, payment_amount)
+
+    if pay_result == PayResult.NOT_ENOUGH_BALANCE:
+        logger.critical(
+            f"CRITICAL: Not enough funds on service wallets for payment! Amount: {payment_amount}. User: {tg_id}")
+        account_manager.add_to_balance(tg_id, total_amount_to_pay)
+        await update.message.reply_text(
+            "❌ *Ошибка сервера*. На сервисных кошельках недостаточно средств. Повторите попытку позже. Средства возвращены на ваш баланс.",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+
+    logger.info(f"Transaction confirmed for user {tg_id}: {payment_amount.format_trx()} TRX to {address}")
+
+    await update.message.reply_text(
+        f"✅ *Перевод выполнен*\n\n"
+        f"Сумма: {payment_amount.format_trx()} TRX\n"
+        f"Получатель: {address}\n"
+        f"Баланс: *{account_manager.get_byn_balance(tg_id):.2f} BYN*",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+    admin_id = get_env_var("ADMIN_ID")
+    admin_message = (
+        f"🔔 *Новый платеж 🔔*\n\n"
+        f"Отправитель: `{tg_id}`\n"
+        f"Получатель: `{address}`\n"
+        f"Сумма: *{context.user_data['total_amount_to_pay']} BYN*\n"
+        f"Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} \n\n"
+    )
+    sent_message = await context.bot.send_message(
+        chat_id=admin_id,
+        text=admin_message,
+        parse_mode="Markdown"
+    )
+    await context.bot.pin_chat_message(chat_id=admin_id,
+                                       message_id=sent_message.message_id, disable_notification=True)
+
+    return ConversationHandler.END
+
 
 async def cancel(update: Update, context: CallbackContext) -> int:
     user = update.effective_user
-    tg_id = user.id
-    username = user.username or f"User{tg_id}"
-    logger.info(f"User {tg_id} (@{username}) cancelled transfer")
+    logger.info(f"User {user.id} cancelled the conversation.")
     await update.message.reply_text(
-        "❌ *Перевод отменен*",
-        parse_mode="Markdown",
+        "Действие отменено.",
         reply_markup=ReplyKeyboardRemove(),
     )
     return ConversationHandler.END
@@ -209,18 +223,9 @@ def get_payment_conversation():
     return ConversationHandler(
         entry_points=[CommandHandler("payment", start_payment)],
         states={
-            ADDRESS: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_address),
-                CommandHandler("cancel", cancel),
-            ],
-            AMOUNT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_amount),
-                CommandHandler("cancel", cancel),
-            ],
-            CONFIRMATION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_transaction),
-                CommandHandler("cancel", cancel),
-            ],
+            ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_address)],
+            AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_amount)],
+            CONFIRMATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_transaction)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
